@@ -3,9 +3,12 @@ from loguru import logger as __logger
 import sys as __sys
 
 __is_logger_ready = False
+__GLOBAL_LOG_LEVEL = "DEBUG"
 
 def init_logger(LOG_LEVEL:str="DEBUG"):
     global __is_logger_ready
+    global __GLOBAL_LOG_LEVEL
+    __GLOBAL_LOG_LEVEL = LOG_LEVEL
     __format_str = "<cyan>{time:MM-DD at HH:mm:ss}</cyan> | <level>{level:7}</level> | {file:15}:{line:4} | <level>{message}</level>"
     __logger.remove()
     __logger.add(__sys.stdout, colorize=True, format=__format_str, level=LOG_LEVEL, diagnose=False)
@@ -41,4 +44,4 @@ def SP_2150(device_sn:str="") -> _SP_2150.SP_2150:
 def mantisCam(device_sn:str="", is_GSENSE:bool = False) -> _mantisCam.MantisCamCtrl:
     if not __is_logger_ready:
         init_logger()
-    return _mantisCam.MantisCamCtrl(device_sn, log_level=GLOBAL_LOG_LEVEL, is_GSENSE = is_GSENSE)
+    return _mantisCam.MantisCamCtrl(device_sn, log_level=__GLOBAL_LOG_LEVEL, is_GSENSE = is_GSENSE)
