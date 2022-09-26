@@ -1,14 +1,32 @@
 import h5py
 import numpy as np
 from loguru import logger
+import scipy.ndimage as image
 
 class mantis_file:
     def __init__(self, path):
         logger.trace(f"Init mantisCam video file {path}.")
         self.path = path
+        self.RUN_CHARGE_SHR_CORRECTION = True
+        self.FIR = [1.488, -0.488]
 
     def __getitem__(self, i) -> np.ndarray:
-        return self.frames[i]
+        with h5py.File(self.path, 'r') as file:
+            if file['camera']['frames'].shape[3] == 3:
+                return self.frame_charge_shr_correction(np.array(file['camera']['frames'][i]))
+            else:
+                return np.array(file['camera']['frames'][i])
+    
+    def __len__(self) -> int:
+        return self.n_frames
+
+    # This function run convolution along x axis for a single frame with shape row x col x chs
+    def video_charge_shr_correction(self, data_in):
+        return image.convolve1d(data_in, self.FIR, axis = 2, mode = 'constant', origin = -1)
+
+    # This function run convolution along x axis for a single frame with shape row x col x chs
+    def frame_charge_shr_correction(self, data_in):
+        return image.convolve1d(data_in, self.FIR, axis = 1, mode = 'constant', origin = -1)
 
     @property
     def system_infos(self) -> dict:
@@ -20,6 +38,18 @@ class mantis_file:
     
     @property
     def frames(self) -> np.ndarray:
+        '''
+        Return all the frames inside this file with following shape:
+        numpy.ndarray[#frame, #rows, #cols, #channels]
+        '''
+        with h5py.File(self.path, 'r') as file:
+            if file['camera']['frames'].shape[3] == 3:
+                return self.video_charge_shr_correction(np.array(file['camera']['frames']))
+            else:
+                return np.array(file['camera']['frames'])
+
+    @property
+    def frames_raw(self) -> np.ndarray:
         '''
         Return all the frames inside this file with following shape:
         numpy.ndarray[#frame, #rows, #cols, #channels]

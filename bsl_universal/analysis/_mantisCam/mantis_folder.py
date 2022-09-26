@@ -13,7 +13,8 @@ class mantis_folder:
     def __init_mantis_video_dict(self):
         filepaths = list(self.path.iterdir())
         for filepath in filepaths:
-            self.__videos[filepath.name] = mantis_file(filepath)
+            if filepath.suffix == ".h5":
+                self.__videos[filepath.name] = mantis_file(filepath)
 
     def __getitem__(self,name:str) -> mantis_file:
         return self.__videos[name]
@@ -24,7 +25,7 @@ class mantis_folder:
 
     @property
     def name_videos(self):
-        return [a.name for a in list(self.path.iterdir())]
+        return list(self.__videos.keys())
     
     @property
     def arr_videos(self):
