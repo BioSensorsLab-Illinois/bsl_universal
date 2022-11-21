@@ -103,7 +103,7 @@ class SP_2150:
         grating : `int`
             Current grating position (1 or 2) of the monochromoator.
         """
-        grating = int(self._com_query("?GRATING"))
+        grating = int(re.findall("\d",self._com_query("?GRATING"))[0])
         self.logger.info(f"Current grating is {grating}.")
         return grating
 
