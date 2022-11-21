@@ -62,7 +62,7 @@ class SP_2150:
         self.logger.info(f"Output set to {wavelength} nm.")
         return None
 
-    def get_wavelength(self) -> str:
+    def get_wavelength(self) -> float:
         """
         - Get the current wavelength (in nm) of the monochromator
         with the format 250.0.
@@ -75,6 +75,37 @@ class SP_2150:
         wavelength = float(re.findall("\d+\.\d+",self._com_query("?NM"))[0])
         self.logger.info(f"Current operating point is at {wavelength} nm.")
         return wavelength
+
+    def set_grating(self, grating) -> None:
+        """
+        - Select either the first or second grating. Requires approximately 20 seconds.
+        Moves to the same wavelength as the previous grating or 200nm default if wavelength
+        is not accessible by the selected grating.
+
+        Parameters
+        -----------
+        grating : `int`
+            Grating (1 or 2). First or second grating.
+        """
+        if (grating!=1 and grating!=2):
+            self.logger.error("Grating must be 1 or 2")
+            raise bsl_type.DeviceOperationError
+        self._com_cmd(f"{grating} GRATING")
+        self.logger.info(f"Grating set to {grating}.")
+        return None
+
+    def get_grating(self) -> int:
+        """
+        - Get the current grating position (1 or 2) of the monochromator.
+
+        Returns:
+        -----------
+        grating : `int`
+            Current grating position (1 or 2) of the monochromoator.
+        """
+        grating = int(self._com_query("?GRATING"))
+        self.logger.info(f"Current grating is {grating}.")
+        return grating
 
     def _com_query(self, msg, timeout:float = 0.5) -> str:
         self._com.flush_read_buffer()
