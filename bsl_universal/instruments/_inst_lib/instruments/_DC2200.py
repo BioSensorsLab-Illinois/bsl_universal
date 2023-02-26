@@ -35,16 +35,7 @@ class DC2200:
                 return False
         self.device_id = self._com.device_id
         return True
-    
-    # def _check_operation_complete(self) -> bool:
-    #     """
-    #     - Check if the instrument finished executing previous commands.
 
-    #     Returns
-    #     --------
-    #     ready : `bool`
-    #         'True' indicates instrument is free and ready for new commands.
-    #     """
 
     def _reset_controller(self) -> None:
         """
@@ -67,6 +58,7 @@ class DC2200:
         self.logger.info(f"Current screen brightness: {brightness}.")
         return brightness
     
+
     def set_screen_brightness(self, brightness:int) -> int:
         """
         - Set the on-boadr touch screen brightness in percentage from 0 to 100.
@@ -88,41 +80,38 @@ class DC2200:
         self.logger.info(f"Current screen brightness: {brightness}%.")
         return brightness
     
+
     def set_LED1_OFF(self) -> None:
         """
         - Turn off the output of LED1.
         """
-        self._com.write("OUTPut:TERMinal 1")
-        self.logger.info(f"Terminal set to: LED1.")
-        self._com.write("OUTPut:STATe OFF")
+        self._com.write("OUTPut1:STATe OFF")
         self.logger.info(f"LED1 state set to OFF.")
+
 
     def set_LED2_OFF(self) -> None:
         """
         - Turn off the output of LED1.
         """
-        self._com.write("OUTPut:TERMinal 2")
-        self.logger.info(f"Terminal set to: LED2.")
-        self._com.write("OUTPut:STATe OFF")
+        self._com.write("OUTPut2:STATe OFF")
         self.logger.info(f"LED2 state set to OFF.")
+
 
     def set_LED1_ON(self) -> None:
         """
         - Turn off the output of LED1.
         """
-        self._com.write("OUTPut:TERMinal 1")
-        self.logger.info(f"Terminal set to: LED1.")
-        self._com.write("OUTPut:STATe ON")
+        self._com.write("OUTPut1:STATe ON")
         self.logger.info(f"LED1 state set to ON.")
+
 
     def set_LED2_ON(self) -> None:
         """
         - Turn off the output of LED1.
         """
-        self._com.write("OUTPut:TERMinal 2")
-        self.logger.info(f"Terminal set to: LED2.")
-        self._com.write("OUTPut:STATe ON")
+        self._com.write("OUTPut2:STATe ON")
         self.logger.info(f"LED2 state set to ON.")
+
 
     def set_LED1_constant_current(self, current_mA:float) -> None:
         """
@@ -134,11 +123,30 @@ class DC2200:
             Desired current output in mA.
         """
         self.set_LED1_OFF()
-        self._com.write("OUTPut:TERMinal 1")
-        self.logger.info(f"Terminal set to: LED1.")
-        self._com.write("SOURce:MODe CC")
+        self._com.write("SOURce1:MODe CC")
         self.logger.info(f"LED1's mode set to Constant Current Mode.")
-            
+        self._com.write(f"SOURCE1:CCURENT:CURRENT {(current_mA/1000):.2f}")
+        self.logger.info(f"LED1's output current set to {current_mA}mA")
+        self.set_LED1_ON()
+
+
+    def set_LED2_constant_current(self, current_mA:float) -> None:
+        """
+        - Set the LED1 to Constant Current mode with specified current setting.
+
+        Parameter
+        --------
+        current_mA : `float`
+            Desired current output in mA.
+        """
+        self.set_LED2_OFF()
+        self._com.write("SOURce2:MODe CC")
+        self.logger.info(f"LED2's mode set to Constant Current Mode.")
+        self._com.write(f"SOURCE2:CCURENT:CURRENT {(current_mA/1000):.2f}")
+        self.logger.info(f"LED2's output current set to {current_mA}mA")
+        self.set_LED2_ON()
+
+
     def get_LED_id(self) -> str:
         """
         - Get the sensor_id from the LED Controller.
@@ -151,6 +159,7 @@ class DC2200:
         sensor_id = self._com.query("SYST:SENS:IDN?").split(",")[0]
         self.logger.info(f"Current connected sensor: {sensor_id}.")
         return sensor_id
+
 
     def close(self) -> None:
         if self._com is not None:
