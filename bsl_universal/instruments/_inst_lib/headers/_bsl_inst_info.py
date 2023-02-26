@@ -14,6 +14,19 @@ class _bsl_inst_info_list:
         SN_REG="(?<=,)P[0-9]+(?=,)"
     )
 
+    DC2200 = _bsl_inst_info_class(
+        MANUFACTURE="THORLAB",
+        MODEL="DC2020",
+        TYPE="LED Controller",
+        INTERFACE="VISA",
+        USB_PID="???",
+        USB_VID="???",
+        QUERY_CMD="*IDN?",
+        QUERY_SN_CMD="*IDN?",
+        QUERY_E_RESP="DC2200",
+        SN_REG="(?<=,)P[0-9]+(?=,)"
+    )
+
     M69920 = _bsl_inst_info_class(
         MANUFACTURE="Newport",
         MODEL="M69920",
