@@ -21,7 +21,7 @@ def PM100D(device_sn:str="") -> _PM100D.PM100D:
         init_logger()
     return _PM100D.PM100D(device_sn)
 
-def DC2200(device_sn:str="") -> _PM100D.PM100D:
+def DC2200(device_sn:str="") -> _DC2200.DC2200:
     if not __is_logger_ready:
         init_logger()
     return _DC2200.DC2200(device_sn)

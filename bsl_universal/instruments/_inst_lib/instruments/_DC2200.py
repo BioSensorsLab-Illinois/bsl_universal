@@ -11,10 +11,10 @@ class DC2200:
         self.device_id=""
         self.logger = bsl_logger(self.inst)
         self.logger.info(f"Initiating bsl_instrument - DC2200({device_sn})...")
+        self._reset_controller()
         if self._com_connect(device_sn):
             self.logger.device_id = self.device_id
-            self.run_update_power_meter()
-            self.logger.success(f"READY - Thorlab DC2200 LED Controller \"{self.device_id}\" with LED \"{self.get_LED_id()}\".\n\n\n")
+            self.logger.success(f"READY - Thorlab DC2200 LED Controller \"{self.device_id}\"\".\n\n\n")
         else:
             self.logger.error(f"FAILED to connect to Thorlab DC2200 ({device_sn}) LED Controller!\n\n\n")
             raise bsl_type.DeviceConnectionFailed
@@ -146,19 +146,116 @@ class DC2200:
         self.logger.info(f"LED2's output current set to {current_mA}mA")
         self.set_LED2_ON()
 
-
-    def get_LED_id(self) -> str:
+    def set_LED1_constant_brightness(self, percent:float) -> None:
         """
-        - Get the sensor_id from the LED Controller.
+        - Set the LED1 to Constant Brightness mode with specified limit setting in 
+            percentage from 0 to 100%.
 
-        Returns
+        Parameter
         --------
-        sensor_id : `str`
-            Sensor ID of the currently connected sensor.
+        percent : `float`
+            Desired brightness output in %Limit.
         """
-        sensor_id = self._com.query("SYST:SENS:IDN?").split(",")[0]
-        self.logger.info(f"Current connected sensor: {sensor_id}.")
-        return sensor_id
+        self.set_LED1_OFF()
+        self._com.write("SOURce1:MODe CB")
+        self.logger.info(f"LED1's mode set to Constant Brightness Mode.")
+        self._com.write(f"SOURCE1:CBRightness:BRIGhtness {(percent):.2f}")
+        self.logger.info(f"LED1's output brightness set to {percent}% of maximum limit.")
+        self.set_LED1_ON()
+
+    def set_LED2_constant_brightness(self, percent:float) -> None:
+        """
+        - Set the LED2 to Constant Brightness mode with specified limit setting in 
+            percentage from 0 to 100%.
+
+        Parameter
+        --------
+        percent : `float`
+            Desired brightness output in %Limit.
+        """
+        self.set_LED2_OFF()
+        self._com.write("SOURce2:MODe CB")
+        self.logger.info(f"LED2's mode set to Constant Brightness Mode.")
+        self._com.write(f"SOURCE2:CBRightness:BRIGhtness {(percent):.2f}")
+        self.logger.info(f"LED2's output brightness set to {percent}% of maximum limit.")
+        self.set_LED2_ON()
+
+    def set_LED1_PWM(self, current_mA:float, frequency:float, duty_cycle:float, count:int=0) -> None:
+        """
+        - Set the LED1 to PWM mode with specified current in mA, switching frequency, duty_cycle in 
+        percentage, and pulse counts.
+
+        Parameter
+        --------
+        current_mA : `float`
+            Desired current output in mA.
+
+        frequency : `float`
+            Desired PWM switching frequency in Hz.
+
+        duty_cycle : 'float'
+            Desired PWM Duty cycles.
+        
+        count : 'int' (default to 0)
+            Desired pulse count, set to 0 for continuous operation
+        """
+        self.set_LED1_OFF()
+        self._com.write("SOURce1:MODe PWM")
+        self.logger.info(f"LED1's mode set to PWM Mode.")
+        self._com.write(f"SOURCE1:PWM:CURRent {(current_mA/1000):.2f}")
+        self.logger.info(f"LED1's output current set to {current_mA}mA.")
+        self._com.write(f"SOURCE1:PWM:FREQency {frequency}.")
+        self.logger.info(f"LED1's PWM frequency set to {frequency}Hz.")
+        self._com.write(f"SOURCE1:PWM:DCYCle {duty_cycle}")
+        self.logger.info(f"LED1's PWM Duty cycle set to {duty_cycle:.2f}%.")
+        self._com.write(f"SOURCE1:PWM:COUNt {count}")
+        self.logger.info(f"LED1's PWM pulse count set to {count}.")
+        self.set_LED1_ON()
+
+    def set_LED2_PWM(self, current_mA:float, frequency:float, duty_cycle:float, count:int=0) -> None:
+        """
+        - Set the LED2 to PWM mode with specified current in mA, switching frequency, duty_cycle in 
+        percentage, and pulse counts.
+
+        Parameter
+        --------
+        current_mA : `float`
+            Desired current output in mA.
+
+        frequency : `float`
+            Desired PWM switching frequency in Hz.
+
+        duty_cycle : 'float'
+            Desired PWM Duty cycles.
+        
+        count : 'int' (default to 0)
+            Desired pulse count, set to 0 for continuous operation
+        """
+        self.set_LED2_OFF()
+        self._com.write("SOURce2:MODe PWM")
+        self.logger.info(f"LED2's mode set to PWM Mode.")
+        self._com.write(f"SOURCE2:PWM:CURRent {(current_mA/1000):.2f}")
+        self.logger.info(f"LED2's output current set to {current_mA}mA.")
+        self._com.write(f"SOURCE2:PWM:FREQency {frequency}.")
+        self.logger.info(f"LED2's PWM frequency set to {frequency}Hz.")
+        self._com.write(f"SOURCE1:PWM:DCYCle {duty_cycle}")
+        self.logger.info(f"LED2's PWM Duty cycle set to {duty_cycle:.2f}%.")
+        self._com.write(f"SOURCE2:PWM:COUNt {count}")
+        self.logger.info(f"LED2's PWM pulse count set to {count}.")
+        self.set_LED2_ON()
+
+    # def get_LED_id(self) -> str:
+    #     """
+    #     - Get the sensor_id from the LED Controller.
+
+    #     Returns
+    #     --------
+    #     sensor_id : `str`
+    #         Sensor ID of the currently connected sensor.
+    #     """
+    #     sensor_id = self._com.query("SYST:SENS:IDN?").split(",")[0]
+    #     self.logger.info(f"Current connected sensor: {sensor_id}.")
+    #     return sensor_id
 
 
     def close(self) -> None:

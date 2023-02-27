@@ -16,7 +16,7 @@ class _bsl_inst_info_list:
 
     DC2200 = _bsl_inst_info_class(
         MANUFACTURE="THORLAB",
-        MODEL="DC2020",
+        MODEL="DC2200",
         TYPE="LED Controller",
         INTERFACE="VISA",
         USB_PID="0x80C8",
@@ -24,7 +24,7 @@ class _bsl_inst_info_list:
         QUERY_CMD="*IDN?",
         QUERY_SN_CMD="*IDN?",
         QUERY_E_RESP="DC2200",
-        SN_REG="(?<=,)P[0-9]+(?=,)"
+        SN_REG="M\d{8}"
     )
 
     M69920 = _bsl_inst_info_class(
