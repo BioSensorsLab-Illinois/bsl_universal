@@ -11,10 +11,10 @@ class DC2200:
         self.device_id=""
         self.logger = bsl_logger(self.inst)
         self.logger.info(f"Initiating bsl_instrument - DC2200({device_sn})...")
-        self._reset_controller()
         if self._com_connect(device_sn):
             self.logger.device_id = self.device_id
             self.logger.success(f"READY - Thorlab DC2200 LED Controller \"{self.device_id}\"\".\n\n\n")
+            self._reset_controller()
         else:
             self.logger.error(f"FAILED to connect to Thorlab DC2200 ({device_sn}) LED Controller!\n\n\n")
             raise bsl_type.DeviceConnectionFailed
