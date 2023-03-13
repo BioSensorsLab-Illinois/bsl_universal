@@ -33,7 +33,7 @@ class mantis_folder:
         return float(match.group())  # Extract the float value from the time string without the 'ms' unit
 
     def __init_mantis_video_dict(self, sort_with_exp:bool=True):
-        filepaths = list(self.path.iterdir())
+        filepaths = [f for f in self.path.iterdir() if f.is_file() and f.suffix == '.h5']
         for filepath in filepaths:
             self.__videos[filepath.name] = mantis_file(filepath)
         if(sort_with_exp):
@@ -48,7 +48,7 @@ class mantis_folder:
 
     @property
     def name_videos(self):
-        return [a.name for a in list(self.path.iterdir())]
+        return [f for f in self.path.iterdir() if f.is_file() and f.suffix == '.h5']
     
     @property
     def arr_files(self) -> list[mantis_file]:
