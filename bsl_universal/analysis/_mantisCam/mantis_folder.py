@@ -4,7 +4,7 @@ from .mantis_file import mantis_file
 from numpy.typing import NDArray
 from tqdm import tqdm
 from loguru import logger
-import re
+import re, os
 
 class mantis_folder:
     def __init__(self, path:Path, sort_with_exp:bool=False):
@@ -48,7 +48,9 @@ class mantis_folder:
 
     @property
     def name_videos(self):
-        return [f for f in self.path.iterdir() if f.is_file() and f.suffix == '.h5']
+        filenames = [f.name for f in self.path.iterdir() if f.is_file() and f.suffix == '.h5']
+        sorted_filenames = sorted(filenames, key=lambda f: os.stat(os.path.join(self.path, f)).st_mtime)
+        return sorted_filenames
     
     @property
     def arr_files(self) -> list[mantis_file]:
