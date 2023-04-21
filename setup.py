@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 setup(
   name = 'bsl_universal',         # How you named your package folder (MyLib)
   packages = find_packages(),   # Chose the same as "name"
-  version = '0.2',      # Start with a small number and increase it with every change you make
+  version = '0.3',      # Start with a small number and increase it with every change you make
   license='MIT',        # Chose a license from here: https://help.github.com/articles/licensing-a-repository
   description = 'Universal Research Library for BioSensors Lab @ UIUC',   # Give a short description about your library
   author = 'Zhongmin Zhu',                   # Type in your name
@@ -19,7 +19,8 @@ setup(
           'seabreeze>=2.0.2',
           'libusb>=1.0.24b3',
           'pycolorname>=0.1.0',
-          'scikit-image>=0.19.2'
+          'scikit-image>=0.19.2',
+          'tqdm>=4.62.3'
       ],
   classifiers=[
     'Development Status :: 3 - Alpha',      # Chose either "3 - Alpha", "4 - Beta" or "5 - Production/Stable" as the current state of your package

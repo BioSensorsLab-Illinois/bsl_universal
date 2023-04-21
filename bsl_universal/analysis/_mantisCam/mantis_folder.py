@@ -80,3 +80,23 @@ class mantis_folder:
         arr_size = self.n_videos *file_shape[0]*file_shape[1]*file_shape[2]*file_shape[3]*2/1000/1000/1000
         logger.warning(f"Your are trying to load the entire folder into a single dataset, this may crush your python kernel if your RAM is not enough! \nEstimate RAM Requirement: {arr_size:.2f}GB")
         return np.array([file.frames for file in tqdm(self.__videos.values(), desc="Loading Dataset")])
+    
+
+    def find_key(self, key:str) -> str:
+        """
+        Find the key of a file in the folder.
+
+        Parameters
+        ----------
+        key : `str`
+            The key to search for.
+
+        Returns
+        -------
+        key : `str`
+            The key of the file.
+        """
+        for file_name in self.name_videos:
+            if key in file_name:
+                return file_name
+        raise ValueError(f"Key {key} not found in folder {self.path}")
