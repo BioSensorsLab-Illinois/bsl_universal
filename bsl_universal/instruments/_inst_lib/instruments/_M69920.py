@@ -4,13 +4,20 @@ from ..headers._bsl_logger import _bsl_logger as bsl_logger
 from ..headers._bsl_type import _bsl_type as bsl_type
 import enum, time
 
+# The Arc Lamp used in the housing with model number "6296" (1000W Xe UV Enhanced)
+# The Arc Lamp's nominal opreating parameters are:
+#   Power Range: 800 - 1100W
+#   Current (Typical): 43.5A (DC)
+#   Voltage (Typical): 23V (DC)
+#   Lamp Life: 1000 Hours
+
 class M69920:
     class SUPPLY_MODE(enum.Enum):
         CURRENT_MODE = 1
         POWER_MODE = 0
 
 
-    def __init__(self, device_sn="", *, mode=0, lim_current=0, lim_power=0) -> None:
+    def __init__(self, device_sn="", *, mode=SUPPLY_MODE.CURRENT_MODE, lim_current=50, lim_power=1200) -> None:
         self.target_device_sn = device_sn
         self.serial_port = None
         self.device_id = ""
@@ -68,7 +75,8 @@ class M69920:
         time.sleep(0.2)
         pass
 
-    def set_lamp_mode(self, mode:SUPPLY_MODE) -> None:
+# This is made to be a privare function since it's not recommended to change the power supply mode for this lamp.
+    def __set_lamp_mode(self, mode:SUPPLY_MODE) -> None:
         if self.is_lamp_ON:
             logger.error("    Lamp need to be turned OFF before changing PWR mode!")
             self.lamp_OFF()
@@ -109,7 +117,8 @@ class M69920:
         time.sleep(0.2)
         pass
 
-    def set_lamp_current(self, current:float) -> None:
+# For this Xe UV Enhanced lamp, the current setting of 43.5 is required for operation.
+    def set_lamp_current(self, current:float = 43.5) -> None:
         # Check if current power supply mode is current mode
         if self.mode == self.SUPPLY_MODE.CURRENT_MODE:
             logger.error(f"    FAILED to set M69920 lamp current, power supply is in POWER_MODE!")
@@ -152,7 +161,7 @@ class M69920:
         time.sleep(0.2)
         pass
     
-    def set_lamp_current_limit(self, lim_I) -> None:
+    def set_lamp_current_limit(self, lim_I=50) -> None:
         # Check if the desired current is smaller than current limits
         if lim_I <= self.preset_current:
             logger.error(f"    FAILED to set M69920 lamp current_limit to {lim_I:.1f} since current limit is smaller than preset_current {self.preset_current:.1f}!")
@@ -170,7 +179,7 @@ class M69920:
         time.sleep(0.2)
         pass
 
-    def set_lamp_power_limit(self, lim_P) -> None:
+    def set_lamp_power_limit(self, lim_P=1200) -> None:
         # Check if the desired current is smaller than current limits
         if lim_P <= self.preset_power:
             logger.error(f"    FAILED to set M69920 lamp power_limit to {lim_P:04d} since it's smaller than preset power {self.preset_power:04d}!")

@@ -16,31 +16,37 @@ def init_logger(LOG_LEVEL:str="DEBUG"):
     __is_logger_ready = True
     return None
 
+# Instrument Class for Thorlabs PM100D Power Meter
 def PM100D(device_sn:str="") -> _PM100D.PM100D:
     if not __is_logger_ready:
         init_logger()
     return _PM100D.PM100D(device_sn)
 
+# Instrument Class for Thorlabs DC2200 DC LED Driver
 def DC2200(device_sn:str="") -> _DC2200.DC2200:
     if not __is_logger_ready:
         init_logger()
     return _DC2200.DC2200(device_sn)
 
+# Instrument Class for NewPort Arc Lamp Supply
 def M69920(device_sn:str="") -> _M69920.M69920:
     if not __is_logger_ready:
         init_logger()
     return _M69920.M69920(device_sn)
 
+# Instrument Class for OceanOptics HR4000CG Spectrometer
 def HR4000CG(device_sn:str="") -> _HR4000CG.HR4000CG:
     if not __is_logger_ready:
         init_logger()
     return _HR4000CG.HR4000CG(device_sn)
 
+# Instrument Class for Gamma Scientific RS-7-1 MultiSpectral LED Source
 def RS_7_1(device_sn:str="", power_on_test:bool=True) -> _RS_7_1.RS_7_1:
     if not __is_logger_ready:
         init_logger()
     return _RS_7_1.RS_7_1(device_sn, power_on_test)
 
+# Instrument Class for Princeton Instruments SP-2150 MonoChromator
 def SP_2150(device_sn:str="") -> _SP_2150.SP_2150:
     if not __is_logger_ready:
         init_logger()
