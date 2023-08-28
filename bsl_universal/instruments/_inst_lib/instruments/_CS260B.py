@@ -16,6 +16,16 @@ class CS260B:
 
 
     def __auto_grating(self, wavelength:float) -> int:
+        """        
+        - This monochromator has four default gratings all with the same Groove Density at 600 lines/mm
+          Below are the four gratings' blaze wavelength w/ corresponding intersection wavelength:
+            Grating 1: 400nm;   xG3:540nm  @65%;   xG2:660nm @48%;   xG4:1000nm @20%
+            Grating 2: 600nm;   xG3:760nm  @66%
+            Grating 3: 1000nm;  xG4:1295nm @59%
+            Grating 4: 1850nm;
+        
+        - Sequential operation order of the gratings is #1 -> #3 -> #2 -> #4
+        """
         # set grating based on wavelength and grating efficiency curves:
         if wavelength < 540:
             self.set_grating(1)
@@ -29,15 +39,28 @@ class CS260B:
     
 
     def __auto_filter(self, wavelength:float) -> int:
+        """
+        - set filter wheel from position #1 to #6
+
+        - This filterwheel has six installed filters all with following wavelength:
+            Filter 1: 335nm Long-pass       Worst-case non-normal incidence cutoff: 315nm
+            Filter 2: 590nm Long-pass       Worst-case non-normal incidence cutoff: 570nm
+            Filter 3: 1000nm Long-pass      Worst-case non-normal incidence cutoff: 980nm
+            Filter 4: 1500nm Long-pass      Worst-case non-normal incidence cutoff: unknown
+            Filter 5: No filter; the light is not filtered
+            Filter 6: No filter; the light is not filtered
+        """
         # set grating based on wavelength and filter transmission curves:
-        if wavelength < 340:
+        if wavelength < 315:
             self.set_filter(1)
-        elif wavelength < 600:
+        elif wavelength < 570:
             self.set_filter(2)
-        elif wavelength < 1000:
+        elif wavelength < 980:
             self.set_filter(3)
-        elif wavelength < 1850:
+        elif wavelength < 1480:
             self.set_filter(4)
+        elif wavelength < 2501:
+            self.set_filter(5)
         return 0 
 
 
@@ -116,10 +139,10 @@ class CS260B:
         - set filter wheel from position #1 to #6
 
         - This filterwheel has six installed filters all with following wavelength:
-            Filter 1: 400nm Long-pass
-            Filter 2: 600nm Long-pass
-            Filter 3: 1000nm Long-pass
-            Filter 4: 1850nm Long-pass
+            Filter 1: 335nm Long-pass       Worst-case non-normal incidence cutoff: 315nm
+            Filter 2: 590nm Long-pass       Worst-case non-normal incidence cutoff: 570nm
+            Filter 3: 1000nm Long-pass      Worst-case non-normal incidence cutoff: 980nm
+            Filter 4: 1500nm Long-pass      Worst-case non-normal incidence cutoff: unknown
             Filter 5: No filter; the light is not filtered
             Filter 6: No filter; the light is not filtered
 
