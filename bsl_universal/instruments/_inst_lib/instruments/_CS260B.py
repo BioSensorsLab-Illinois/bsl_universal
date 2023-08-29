@@ -13,12 +13,13 @@ class CS260B:
         self.logger.info(f"Initiating bsl_instrument - CS260B-Q-MC-D({device_sn})...")
         if self.__visa_connect(device_sn) == 0:
             self.logger.device_id = self.device_id
-            self.logger.success(f"READY - Newport CS260B Monochromator \"{self.device_id}\"\.\n\n\n")
             self.__equipmnet_init()
+            self.logger.success(f"READY - Newport CS260B Monochromator \"{self.device_id}\"\.\n\n\n")
         else:
             self.logger.error(f"FAILED to connect to Newport CS260B Monochromator ({device_sn})!\n\n\n")
             raise bsl_type.DeviceConnectionFailed
         pass
+
 
     def __visa_connect(self, device_sn:str="") -> int:
         try:
@@ -33,6 +34,8 @@ class CS260B:
         return 0
 
     def __equipmnet_init(self):
+        self.get_idle(blocking=True)
+        self.get_errors()
         return 0    
 
 
@@ -144,6 +147,7 @@ class CS260B:
             raise bsl_type.DeviceInconsistentError
         self.logger.debug("Device input shutter is OPENED.")
         return 0
+    
 
     def close_shutter(self) -> bool:
         """
@@ -178,6 +182,7 @@ class CS260B:
             return 0
         self.logger.debug(f"Device shutter status: {resp}")
         return -1
+
 
     def set_grating(self, grating:int) -> int:
         """
@@ -260,12 +265,13 @@ class CS260B:
         return 0
     
     
-    def set_ON_auto_bandpass_adjust(self):
-        return 0
+    # def set_ON_auto_bandpass_adjust(self):
+    #     return 0
     
 
-    def set_OFF_auto_bandpass_adjust(self):
-        return 0
+    # def set_OFF_auto_bandpass_adjust(self):
+    #     return 0
+
 
     def __set_gethome(self) -> int:
         """
@@ -350,9 +356,128 @@ class CS260B:
                 self.logger.error(f"Device operation TIMEOUT!")
                 raise bsl_type.DeviceTimeOutError
         return idle
+    
 
-    def get_status(self):
-        return 0    
+    def set_output_axial(self) -> int:
+        """
+        Select the output port through which light will exit the CS260B to the Axial port.
+
+        Warning: Only ONE output port can be selected at a time. If light was outputted through
+        the Lateral port, it will be switched to the Axial port.
+        
+        Returns
+        -------
+        result : `int`
+            0 if success.
+        """
+        self._com.write("OUTPORT A")
+        self.logger.debug(f"Setting output port to Axial.")
+        self.get_idle(blocking=True)
+        cur_outport = self.get_output_port()
+
+        if cur_outport != 1:
+            self.logger.error(f"Failed to set output port to Axial!")
+            raise bsl_type.DeviceInconsistentError
+        self.logger.debug("Device output port is set to Axial.")
+        return 0
+    
+
+    def set_output_lateral(self) -> int:
+        """
+        Select the output port through which light will exit the CS260B to the Lateral port.
+
+        Warning: Only ONE output port can be selected at a time. If light was outputted through
+        the Axial port, it will be switched to the lateral port.
+        
+        Returns
+        -------
+        result : `int`
+            0 if success.
+        """
+        self._com.write("OUTPORT L")
+        self.logger.debug(f"Setting output port to Lateral.")
+        self.get_idle(blocking=True)
+        cur_outport = self.get_output_port()
+
+        if cur_outport != 1:
+            self.logger.error(f"Failed to set output port to Lateral!")
+            raise bsl_type.DeviceInconsistentError
+        self.logger.debug("Device output port is set to Lateral.")
+        return 0
+    
+
+    def get_output_port(self) -> int:
+        """
+        - Query the output port setting.
+
+        Returns
+        --------
+        outport : `int`
+            1 -> Light is outputted through the AXIAL port.
+            2 -> Light is outputted through the LATERAL port.
+        """
+        resp = self._com.query("OUTPORT?")
+        if resp == '1':
+            self.logger.debug(f"Device output port is AXIAL.")
+        elif resp == '2':
+            self.logger.debug(f"Device output port is LATERAL.")
+        else:
+            self.logger.debug(f"Device output port status: {resp}")
+        return resp
+    
+
+    def get_error_legacy(self) -> int:
+        """
+        - Query the error byte. Legacy mode for quick verification.
+
+        Returns
+        --------
+        error : `int`
+            See logger information for error descriptions.
+        """
+        err = self._com.query("ERROR?")
+        if err == 0:
+            self.logger.debug(f"No Error logged, device is operation normal.")
+        elif err == 1:
+            self.logger.error(f"Error 1: Invalid command previouslly detected.")
+        elif err == 2:
+            self.logger.error(f"Error 2: Invalid parameter previouslly detected.")
+        elif err == 3:
+            self.logger.error("Error 2: Destination position for wavelength motion not allowed.")
+        elif err == 6:
+            self.logger.error("Error 6: Accessory not present (usually filter wheel).")
+        elif err == 8:
+            self.logger.error("Error 8: Could not home wavelength drive.")
+        elif err == 9:
+            self.logger.error("Error 9: Label too long (e.g. “filter1label chartreuse”).")
+        elif err == 10:
+            self.logger.error("Error 10: System error.")
+        if err != 0:
+            raise bsl_type.DeviceOperationError
+        return err
+    
+
+    def get_errors(self) -> int:
+        """
+        - Query the system error information.
+
+        Returns
+        --------
+        error : `int`
+            See logger information for error descriptions.
+        """
+        count = 1
+        (err_code, err_msg) = self._com.query("SYSTEM:ERROR?").split(',')
+
+        if err_code == '0':
+            return 0
+
+        while (err_code != 0 and count < 11):
+            count += 1
+            self.logger.error(f"Device Error with error code:{err_code}; error msg: {err_msg}.")
+            (err_code, err_msg) = self._com.query("SYSTEM:ERROR?").split(',')
+        raise bsl_type.DeviceOperationError
+    
 
     def disconnect(self):
         return 0    
