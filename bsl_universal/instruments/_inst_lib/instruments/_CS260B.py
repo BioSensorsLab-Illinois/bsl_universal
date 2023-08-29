@@ -13,7 +13,7 @@ class CS260B:
         self.logger.info(f"Initiating bsl_instrument - CS260B-Q-MC-D({device_sn})...")
         if self.__visa_connect(device_sn) == 0:
             self.logger.device_id = self.device_id
-            self.logger.success(f"READY - Newport CS260B Monochromator \"{self.device_id}\"\".\n\n\n")
+            self.logger.success(f"READY - Newport CS260B Monochromator \"{self.device_id}\"\.\n\n\n")
             self.__equipmnet_init()
         else:
             self.logger.error(f"FAILED to connect to Newport CS260B Monochromator ({device_sn})!\n\n\n")
