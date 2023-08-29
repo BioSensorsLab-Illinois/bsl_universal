@@ -85,7 +85,7 @@ class CS260B:
         return 0 
 
 
-    def set_wavelength(self, wavelength:float=0.0, auto_grating:bool = True, auto_filter:bool = True) -> float:
+    def set_wavelength(self, wavelength:float=0.0, auto_grating:bool = True, auto_filter:bool = False) -> float:
         """
         - set output wavelength of the monochromator in nm.
 
@@ -94,8 +94,14 @@ class CS260B:
 
         Parameters
         ----------
-        grating : `int`
-            Desired grating number from 1 to 4.
+        wavelength : `float` (Default: 0.0)
+            Desired wavelength in nm, default to broad-spectrum.
+        
+        auto_grating : `bool` (Default: True)
+            Auto adjust grating setting based on requested wavelength.
+        
+        auto_filter : `bool` (Default: False)
+            Auto adjust filter setting based on requested wavelength.
 
         Returns
         -------
@@ -111,15 +117,67 @@ class CS260B:
 
         if auto_filter:
             self.__auto_filter(wavelength)
+
+        self._com.write(f"GOWAVE {wavelength:.3f}")
+        self.logger.debug(f"Setting wavelength to {wavelength:.3f}")
+        self.get_idle(blocking=True)
+        cur_wavelength = self.get_current_wavelength()
+
+        if round(cur_wavelength) != round(wavelength):
+            self.logger.error(f"Failed to set output wavelength to {wavelength:.3f}! Readback wavelength @ {cur_wavelength:.3f}!")
+            raise bsl_type.DeviceInconsistentError
+        self.logger.debug(f"Device output wavelength set to {cur_wavelength}.")
         return 0    
     
 
-    def open_shutter(self) -> bool:
+    def open_shutter(self) -> int:
+        """
+        Open the input shutter of the monochromator.
+        """
+        self._com.write("SHUTTER 1")
+        self.logger.debug(f"Setting shutter to OPEN")
+        self.get_idle(blocking=True)
+        cur_shutter = self.get_shutter_status()
+
+        if cur_shutter != 1:
+            self.logger.error(f"Failed to open the input shutter!")
+            raise bsl_type.DeviceInconsistentError
+        self.logger.debug("Device input shutter is OPENED.")
         return 0
 
     def close_shutter(self) -> bool:
+        """
+        Close the input shutter of the monochromator.
+        """
+        self._com.write("SHUTTER 0")
+        self.logger.debug(f"Setting shutter to CLOSE")
+        self.get_idle(blocking=True)
+
+        cur_shutter = self.get_shutter_status()
+        if cur_shutter != 0:
+            self.logger.error(f"Failed to open the input shutter!")
+            raise bsl_type.DeviceInconsistentError
+        self.logger.debug("Device input shutter is CLOSED.")
         return 0
-    
+
+
+    def get_shutter_status(self) -> int:
+        """
+        - Get current input shutter status.
+
+        Returns
+        --------
+        shutter : `int`
+            0 -> shutter is CLOSED.
+            1 -> shutter is OPENED.
+        """
+        resp = self._com.query("SHUTTER?")
+        if resp == 'O':
+            return 1
+        elif resp == 'C':
+            return 0
+        self.logger.debug(f"Device shutter status: {resp}")
+        return -1
 
     def set_grating(self, grating:int) -> int:
         """
@@ -152,10 +210,18 @@ class CS260B:
         #Check current grating setting before setting new grating:
         if self.get_current_grating() == grating:
             return 0
+
+        self._com.write(f"GRATing {grating}")
+        self.logger.debug(f"Setting grating position to {grating}.")
+        self.get_idle(blocking=True)        
+        cur_grating = self.get_current_grating()
+        if cur_grating != grating:
+            self.logger.error(f"Failed to set grating pos. to {grating}, current grating pos, at {cur_grating}!")
+            raise bsl_type.DeviceInconsistentError
         return 0
     
 
-    def set_filter(self, filter:int) -> int:
+    def set_filter(self, filter:int=5) -> int:
         """
         - set filter wheel from position #1 to #6
 
@@ -184,6 +250,13 @@ class CS260B:
         if self.get_current_filter() == filter:
             return 0
         
+        self._com.write(f"FILTER {filter}")
+        self.logger.debug(f"Setting filter position to {filter}")
+        self.get_idle(blocking=True)        
+        cur_filter = self.get_current_filter()
+        if cur_filter != filter:
+            self.logger.error(f"Failed to set filter pos. to {filter}, current filter pos, at {cur_filter}!")
+            raise bsl_type.DeviceInconsistentError
         return 0
     
     
@@ -194,6 +267,14 @@ class CS260B:
     def set_OFF_auto_bandpass_adjust(self):
         return 0
 
+    def __set_gethome(self) -> int:
+        """
+        Cause the grating rotation stage to rotate to its mechanical “home” position. 
+        This position does not correspond to any wavelength.
+        """
+        self._com.write("FINDHOME")
+        self.get_idle(blocking=True)
+        return 0
 
     # This should be the safe access for current setting
     # the instrument's actual readout
@@ -207,17 +288,72 @@ class CS260B:
             Current wavelength setting from the monochromator.
         """
         wavelength = float(self._com.query("WAVE?"))
+        self.logger.debug(f"Readback wavelength: {wavelength:.3f}")
         return wavelength   
     
+    
     def get_current_grating(self) -> int:
-        return 0
+        """
+        - Get current grating# setting from the monochromator.
+
+        Returns
+        --------
+        grating : `int`
+            Current grating# setting from the monochromator.
+        """
+        grating = int(self._com.query("GRATing?").split(',')[0])
+        self.logger.debug(f"Readback #grating: {grating}")
+        return grating   
+    
 
     def get_current_filter(self) -> int:
-        return 0
+        """
+        - Get current Filter posiotion setting from the monochromator.
+
+        Returns
+        --------
+        filter : `int`
+            Current ilter posiotion setting from the monochromator.
+        """
+        filter = int(self._com.query("FILTER?"))
+        self.logger.debug(f"Readback filter: {filter}")
+        return filter   
+
+
+    def get_idle(self, blocking:bool=False, timeout_sec:int=15) -> int:
+        """
+        - Get current operation status of the monochromator.
+
+        Parameters
+        ----------
+        blocking : `bool` (Default: FALSE)
+            Set blocking to TRUE if blocking/waiting until device is READY is required.
+            
+        timeout_sec : `int` (Default: 15s)
+            Set timeout threshold for IDLE waiting period, error is thrown if reached. 
+
+        Returns
+        --------
+        IDLE : `int`
+            0 -> Monochromator is BUSY.
+            1 -> Monochromator is READY for next operation.
+        """
+        start = time.time()
+        idle = int(self._com.query("IDLE?"))
+        self.logger.debug(f"Device IDLE readback is {idle}.")
+        while (blocking and not idle):
+            time.sleep(0.5)
+            idle = int(self._com.query("IDLE?"))
+            self.logger.debug(f"Device IDLE readback is {idle}.")
+            self.logger.debug(f"Device is BUSY, retrying...")
+            if (time.time()-start > timeout_sec):
+                self.logger.error(f"Device operation TIMEOUT!")
+                raise bsl_type.DeviceTimeOutError
+        return idle
 
     def get_status(self):
         return 0    
 
     def disconnect(self):
         return 0    
-
+    

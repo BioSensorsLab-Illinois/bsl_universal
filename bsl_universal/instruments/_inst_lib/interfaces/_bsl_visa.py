@@ -76,7 +76,7 @@ class _bsl_visa:
 
     def query(self, cmd:str):
         logger_opt.trace(f"        {self.inst.MODEL} - com-VISA - Query to {self.inst.MODEL} with {cmd}")
-        resp = self.com_port.query(cmd)
+        resp = self.com_port.query(cmd).strip()
         logger_opt.trace(f"        {self.inst.MODEL} - com-VISA - Resp from {self.inst.MODEL} with {repr(resp)}")
         return resp
     
