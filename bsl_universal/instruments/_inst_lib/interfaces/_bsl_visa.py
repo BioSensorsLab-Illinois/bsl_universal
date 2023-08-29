@@ -8,7 +8,7 @@ except ImportError:
     pass
 logger_opt = logger.opt(ansi=True)
 
-@logger_opt.catch
+# @logger_opt.catch
 class _bsl_visa:
 
     def __init__(self, target_inst:_bsl_inst_info_list, device_sn:str="") -> None:
@@ -37,7 +37,11 @@ class _bsl_visa:
             if (self.inst.USB_PID in port) and (self.inst.USB_VID in port):
                 logger_opt.debug(f"    {self.inst.MODEL} is found with USB_PID/VID search.")
                 temp_com_port = self.visa_resource_manager.open_resource(port)
-                device_id = re.search(self.inst.SN_REG, temp_com_port.query(self.inst.QUERY_CMD).strip()).group(0)
+                re_result = re.search(self.inst.SN_REG, temp_com_port.query(self.inst.QUERY_CMD).strip())
+                if re_result is not None:
+                    device_id = re_result.group(1)
+                else:
+                    device_id = "UNABLE_TO_OBTAIN"
                 if self.target_device_sn not in device_id:
                     temp_com_port.close()
                     logger_opt.warning(f"    S/N Mismatch - Device <light-blue><italic>{port}</italic></light-blue> with S/N <light-blue><italic>{device_id}</italic></light-blue> found, not <light-blue><italic>{self.target_device_sn}</italic></light-blue> as requested, moving to next available device...")
@@ -47,7 +51,7 @@ class _bsl_visa:
             if ( str(int(self.inst.USB_PID,16)) in port and str(int(self.inst.USB_VID,16)) in port):
                 logger_opt.debug(f"    {self.inst.MODEL} is found with USB_PID/VID search.")
                 temp_com_port = self.visa_resource_manager.open_resource(port)
-                device_id = re.search(self.inst.SN_REG, temp_com_port.query(self.inst.QUERY_CMD).strip()).group(0)
+                device_id = re.search(self.inst.SN_REG, temp_com_port.query(self.inst.QUERY_CMD).strip()).group(1)
                 if self.target_device_sn not in device_id:
                     temp_com_port.close()
                     logger_opt.warning(f"    S/N Mismatch - Device <light-blue><italic>{port}</italic></light-blue> with S/N <light-blue><italic>{device_id}</italic></light-blue> found, not <light-blue><italic>{self.target_device_sn}</italic></light-blue> as requested, moving to next available device...")

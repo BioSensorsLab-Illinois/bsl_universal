@@ -4,7 +4,7 @@ from ._bsl_inst_info import _bsl_inst_info_class as inst
 
 logger_opt = logger.opt(ansi=True)
 
-@logger.catch(exclude=(bsl_type.DeviceConnectionFailed,bsl_type.DeviceInconsistentError,bsl_type.DeviceOperationError))
+# @logger.catch(exclude=(bsl_type.DeviceConnectionFailed,bsl_type.DeviceInconsistentError,bsl_type.DeviceOperationError))
 class _bsl_logger:
     def __init__(self, cur_inst: inst, device_id: str="N/A") -> None:
         self.__inst = cur_inst

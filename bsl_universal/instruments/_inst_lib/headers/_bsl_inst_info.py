@@ -28,7 +28,7 @@ class _bsl_inst_info_list:
     )
 
     M69920 = _bsl_inst_info_class(
-        MANUFACTURE="Newport",
+        MANUFACTURE="Newport Corp.",
         MODEL="M69920",
         TYPE="Power Supply",
         INTERFACE="Serial",
@@ -36,6 +36,20 @@ class _bsl_inst_info_list:
         SERIAL_NAME="M69920",
         QUERY_CMD="IDN?",
         QUERY_E_RESP="69920"
+    )
+
+    CS260B = _bsl_inst_info_class(
+        MANUFACTURE="Newport Corp.",
+        MODEL="CS260B-Q-MC-D",
+        TYPE="Monochromator",
+        SERIAL_NAME="???",
+        INTERFACE="VISA",
+        USB_PID="0x0014",
+        USB_VID="0x1FDE",
+        QUERY_CMD="*IDN?",
+        QUERY_SN_CMD="*IDN?",
+        QUERY_E_RESP="CS260B",
+        SN_REG="^Newport Corp,CS260B,([^,]+)"
     )
 
     HR4000CG = _bsl_inst_info_class(

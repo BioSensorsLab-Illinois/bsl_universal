@@ -8,7 +8,7 @@ import re
 logger_opt = logger.opt(ansi=True)
 
 
-@logger_opt.catch
+# @logger_opt.catch
 class _bsl_serial:
     def __init__(self, target_inst:_bsl_inst_info_list , device_sn:str="") -> None:
         logger_opt.info("    Initiating bsl_serial_service...")

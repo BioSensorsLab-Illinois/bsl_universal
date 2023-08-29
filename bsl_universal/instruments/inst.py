@@ -1,4 +1,4 @@
-from ._inst_lib.instruments import _HR4000CG, _M69920, _PM100D, _RS_7_1, _SP_2150, _mantisCam, _DC2200
+from ._inst_lib.instruments import _HR4000CG, _M69920, _PM100D, _RS_7_1, _SP_2150, _mantisCam, _DC2200, _CS260B
 from loguru import logger as __logger
 import sys as __sys
 
@@ -33,6 +33,11 @@ def M69920(device_sn:str="") -> _M69920.M69920:
     if not __is_logger_ready:
         init_logger()
     return _M69920.M69920(device_sn)
+
+def CS260B(device_sn:str="") -> _CS260B.CS260B:
+    if not __is_logger_ready:
+        init_logger()
+    return _CS260B.CS260B(device_sn)
 
 # Instrument Class for OceanOptics HR4000CG Spectrometer
 def HR4000CG(device_sn:str="") -> _HR4000CG.HR4000CG:

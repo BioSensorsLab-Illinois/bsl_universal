@@ -1,15 +1,36 @@
-from ..interfaces._bsl_serial import _bsl_serial as bsl_serial
+from ..interfaces._bsl_visa import _bsl_visa as bsl_visa
 from ..headers._bsl_inst_info import _bsl_inst_info_list as inst
 from ..headers._bsl_logger import _bsl_logger as bsl_logger
 from ..headers._bsl_type import _bsl_type as bsl_type
+import time, sys
 
 class CS260B:   
 
-    def __init__(self, COM_id):
-        return 0
+    def __init__(self, device_sn:str="") -> None:
+        self.inst = inst.CS260B
+        self.device_id="" 
+        self.logger = bsl_logger(self.inst)
+        self.logger.info(f"Initiating bsl_instrument - CS260B-Q-MC-D({device_sn})...")
+        if self.__visa_connect(device_sn) == 0:
+            self.logger.device_id = self.device_id
+            self.logger.success(f"READY - Newport CS260B Monochromator \"{self.device_id}\"\".\n\n\n")
+            self.__equipmnet_init()
+        else:
+            self.logger.error(f"FAILED to connect to Newport CS260B Monochromator ({device_sn})!\n\n\n")
+            raise bsl_type.DeviceConnectionFailed
+        pass
 
-    def __serial_connect(self):
-        return 0    
+    def __visa_connect(self, device_sn:str="") -> int:
+        try:
+            self._com = bsl_visa(inst.CS260B, device_sn)
+        except Exception as e:
+            self.logger.error(f"{type(e)}")
+            sys.exit(-1)
+        if self._com is None:
+            if self._com.com_port is None:
+                return -1
+        self.device_id = self._com.device_id
+        return 0
 
     def __equipmnet_init(self):
         return 0    
@@ -176,8 +197,17 @@ class CS260B:
 
     # This should be the safe access for current setting
     # the instrument's actual readout
-    def get_current_nm(self) -> float:
-        return 0    
+    def get_current_wavelength(self) -> float:
+        """
+        - Get current wavelength setting from the monochromator.
+
+        Returns
+        --------
+        wavelength : `float`
+            Current wavelength setting from the monochromator.
+        """
+        wavelength = float(self._com.query("WAVE?"))
+        return wavelength   
     
     def get_current_grating(self) -> int:
         return 0
