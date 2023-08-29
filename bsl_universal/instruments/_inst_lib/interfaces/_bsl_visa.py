@@ -70,7 +70,7 @@ class _bsl_visa:
             if self.inst.QUERY_E_RESP not in self.device_id:
                 logger_opt.error(f"    FAILED - Wrong device identifier (E_RESP) is returned!")
                 raise _bsl_type.DeviceConnectionFailed
-            self.device_id = re.search(self.inst.SN_REG, self.device_id).group(0)
+            self.device_id = re.search(self.inst.SN_REG, self.device_id).group(1)
             logger_opt.success(f"    {self.inst.MODEL} with DEVICE_ID: <light-blue><italic>{self.device_id}</italic></light-blue> found and connected!")
         pass
 
