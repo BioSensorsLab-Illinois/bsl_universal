@@ -73,9 +73,9 @@ class CS260B:
         if wavelength < 540:
             self.set_grating(1)
         elif wavelength < 760:
-            self.set_grating(2)
-        elif wavelength < 1295:
             self.set_grating(3)
+        elif wavelength < 1295:
+            self.set_grating(2)
         elif wavelength < 2501:
             self.set_grating(4)
         return 0
@@ -271,18 +271,21 @@ class CS260B:
 
         Warning: Only ONE output port can be selected at a time. If light was outputted through
         the Lateral port, it will be switched to the Axial port.
+
+        ISSUE: Datasheet inconsistency - Lateral on datasheet with parameter 'L' or '2' is actually
+        Axial, and vice versa!
         
         Returns
         -------
         result : `int`
             0 if success.
         """
-        self._com.write("OUTPORT A")
+        self._com.write("OUTPORT L")
         self.logger.debug(f"Setting output port to Axial.")
         self.get_idle(blocking=True)
         cur_outport = self.get_output_port()
 
-        if cur_outport != 1:
+        if cur_outport != 2:
             self.logger.error(f"Failed to set output port to Axial!")
             raise bsl_type.DeviceInconsistentError
         self.logger.debug("Device output port is set to Axial.")
@@ -295,18 +298,21 @@ class CS260B:
 
         Warning: Only ONE output port can be selected at a time. If light was outputted through
         the Axial port, it will be switched to the lateral port.
+
+        ISSUE: Datasheet inconsistency - Lateral on datasheet with parameter 'L' or '2' is actually
+        Axial, and vice versa!
         
         Returns
         -------
         result : `int`
             0 if success.
         """
-        self._com.write("OUTPORT L")
+        self._com.write("OUTPORT A")
         self.logger.debug(f"Setting output port to Lateral.")
         self.get_idle(blocking=True)
         cur_outport = self.get_output_port()
 
-        if cur_outport != 2:
+        if cur_outport != 1:
             self.logger.error(f"Failed to set output port to Lateral!")
             raise bsl_type.DeviceInconsistentError
         self.logger.debug("Device output port is set to Lateral.")
@@ -415,17 +421,20 @@ class CS260B:
         """
         - Query the output port setting.
 
+        ISSUE: Datasheet inconsistency - Lateral on datasheet with parameter 'L' or '2' is actually
+        Axial, and vice versa!
+
         Returns
         --------
         outport : `int`
-            1 -> Light is outputted through the AXIAL port.
-            2 -> Light is outputted through the LATERAL port.
+            1 -> Light is outputted through the LATERAL port.
+            2 -> Light is outputted through the AXIAL port.
         """
         resp = self._com.query("OUTPORT?")
         if resp == '1':
-            self.logger.debug(f"Device output port is AXIAL.")
-        elif resp == '2':
             self.logger.debug(f"Device output port is LATERAL.")
+        elif resp == '2':
+            self.logger.debug(f"Device output port is AXIAL.")
         else:
             self.logger.debug(f"Device output port status: {resp}")
         return int(resp)

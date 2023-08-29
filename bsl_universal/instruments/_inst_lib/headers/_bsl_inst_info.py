@@ -32,9 +32,9 @@ class _bsl_inst_info_list:
         MODEL="M69920",
         TYPE="Power Supply",
         INTERFACE="Serial",
-        BAUDRATE=0,
-        SERIAL_NAME="M69920",
-        QUERY_CMD="IDN?",
+        BAUDRATE=9600,
+        SERIAL_NAME="69920",
+        QUERY_CMD="IDN?\r",
         QUERY_E_RESP="69920"
     )
 

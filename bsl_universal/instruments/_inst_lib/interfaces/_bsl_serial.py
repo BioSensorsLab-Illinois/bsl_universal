@@ -128,6 +128,11 @@ class _bsl_serial:
         logger_opt.trace(f"        {self.inst.MODEL} - com-Serial - Resp from {self.inst.MODEL} with {repr(resp)}")
         return resp.strip('\n\r')
 
+    def read_all(self) -> bytes:
+        resp = self.serial_port.read_all()
+        logger_opt.trace(f"        {self.inst.MODEL} - com-Serial - Resp from {self.inst.MODEL} with {repr(resp)}")
+        return resp.strip()
+
     def write(self, msg:str) -> int:
         logger_opt.trace(f"        {self.inst.MODEL} - com-Serial - Write to {self.inst.MODEL} with {repr(msg)}")
         return self.serial_port.write(bytes(msg, 'ascii'))
