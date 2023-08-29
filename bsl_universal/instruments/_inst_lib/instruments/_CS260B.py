@@ -35,7 +35,10 @@ class CS260B:
 
     def __equipmnet_init(self):
         self.get_idle(blocking=True)
+        self.__set_gethome()
         self.get_errors()
+        self.set_wavelength(450.0)
+        self.get_idle(blocking=True)
         return 0    
 
 
@@ -280,6 +283,7 @@ class CS260B:
         """
         self._com.write("FINDHOME")
         self.get_idle(blocking=True)
+        self.logger.debug("Device grating is homed.")
         return 0
 
     # This should be the safe access for current setting
@@ -346,12 +350,15 @@ class CS260B:
         """
         start = time.time()
         idle = int(self._com.query("IDLE?"))
-        self.logger.debug(f"Device IDLE readback is {idle}.")
+        idle_msg = "BUSY" if (idle == 0) else "READY"
+        self.logger.debug(f"Device IDLE readback is {idle_msg}.")
+
         while (blocking and not idle):
+            self.logger.debug(f"Device is BUSY, retrying...")
             time.sleep(0.5)
             idle = int(self._com.query("IDLE?"))
-            self.logger.debug(f"Device IDLE readback is {idle}.")
-            self.logger.debug(f"Device is BUSY, retrying...")
+            idle_msg = "BUSY" if (idle == 0) else "READY"
+            self.logger.debug(f"Device IDLE readback is {idle_msg}.")
             if (time.time()-start > timeout_sec):
                 self.logger.error(f"Device operation TIMEOUT!")
                 raise bsl_type.DeviceTimeOutError
@@ -469,7 +476,7 @@ class CS260B:
         count = 1
         (err_code, err_msg) = self._com.query("SYSTEM:ERROR?").split(',')
 
-        if err_code == '0':
+        if err_code == '0' or err_code == "501":
             return 0
 
         while (err_code != 0 and count < 11):
