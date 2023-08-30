@@ -19,25 +19,17 @@ class M69920:
     def __init__(self, device_sn="", *, mode=SUPPLY_MODE.POWER_MODE, lim_current:int=50, lim_power:int=1200, default_power:int=1000) -> None:
         self.target_device_sn = device_sn
         self.inst = inst.M69920
-        self.serial_port = None
         self.device_id = ""
         self.logger = bsl_logger(self.inst)
         self.logger.info(f"Initiating bsl_instrument - M69920({device_sn})...")
         if self._serial_connect():
             self.logger.success(f"Connected - Newport M69920 Lamp Power Supply.\n\n\n")
-            self.serial_command("RST")
-            time.sleep(3)
-            self.lamp_OFF()
-            self.__set_lamp_mode(mode)
-            self.set_lamp_current_limit(lim_current)
-            self.set_lamp_power_limit(lim_power)
-            # self.set_lamp_current(43.5)
-            self.set_lamp_power(default_power)
+            self.__init_lamp(mode, lim_current, lim_power, default_power)
             self.logger.warning(f"This Arc Lamp Power Supply has been configured to work with the UV-Enhanced Xeon Arc Lamp.")
             self.logger.warning(f"All the operation parameter has been preset for this specific Arc Lamp.")
             self.logger.warning(f"You should ONLY use readonly features/functions and Lamp ON/OFF functions for the operation!")
             self.logger.warning(f"All other operation are reserved for internal useages and experimental project!")
-            self.logger.success(f"READY - Newport M69920 Lamp Power Supply \"{self.device_id}\"\.\n\n\n")
+            self.logger.success(f"READY - Newport M69920 Lamp Power Supply.\n\n\n")
         else:
             self.logger.error(f"FAILED to connect to M69920 Arc lamp's power supply! ({device_sn})!\n\n\n")
             raise bsl_type.DeviceConnectionFailed
@@ -62,7 +54,7 @@ class M69920:
         time.sleep(0.05)
         self.serial.flush_read_buffer()
         self.serial.writeline(msg)
-        time.sleep(0.1)
+        time.sleep(0.05)
         resp = self.serial.read_all()
         return resp
     
@@ -71,16 +63,28 @@ class M69920:
         time.sleep(0.05)
         self.serial.flush_read_buffer()
         self.serial.writeline(msg)
-        time.sleep(0.1)
+        time.sleep(0.05)
         resp = self.serial.read_all()
         return float(resp.decode('utf-8'))
+
+    
+    def __init_lamp(self, mode=SUPPLY_MODE.POWER_MODE, lim_current:int=50, lim_power:int=1200, default_power:int=1000) -> int:
+        self.serial_command("RST")
+        time.sleep(5)
+        self.lamp_OFF()
+        self.__set_lamp_mode(mode)
+        self.set_lamp_current_limit(lim_current)
+        self.set_lamp_power_limit(lim_power)
+        self.set_lamp_power(default_power)
+        self.logger.success(f"Arc Lamp power supply RESETTED!")
+        return 0
 
 
     def __STB_query(self, retry:int=3) -> int:
         count = 1
         resp=""
-        if ("STB" not in str(resp)) and (count < retry):
-            resp = self.serial_command("STB?")
+        while ("STB" not in str(resp)) and (count <= retry):
+            resp = self.serial_command("STB?").decode('utf-8')
             count += 1
 
         # Parse the status bit from incomming msg
@@ -97,14 +101,14 @@ class M69920:
             self.__mode = self.SUPPLY_MODE.CURRENT_MODE
         # Check bit-3 for errors
         if (h_status &0b0000_1000) != 0:
-            self.logger.error("Arc Lamp Supply ERROR detected!")
-            self._read_error_register()
+            self.logger.warning("Arc Lamp Supply ERROR detected! Possible ignition failiure.")
+            self.__error_checking()
         # Check bit-2 for front panel lock status
         if (h_status &0b0000_0100) != 0:
             self.__frontpanel_lock = True
         else:
             self.__frontpanel_lock = False
-            self.logger.warning("Arc Lamp Power Supply front panel is not locked, take caution!")
+            # self.logger.warning("Arc Lamp Power Supply front panel is not locked, take caution!")
         # Check bit-1 for power_supply limit status
         if (h_status &0b0000_0010) != 0:
             self.logger.error("Arc Lamp Power Supply LIMIT REACHED, please adjust output or increase PWR/CUR limits!")
@@ -118,7 +122,7 @@ class M69920:
     def __error_checking(self, retry:int=3) -> int:
         count = 1
         resp=""
-        if ("ESR" not in str(resp)) and (count < retry):
+        while ("ESR" not in str(resp)) and (count <= retry):
             resp = self.serial_command("ESR?")
             count += 1
 
@@ -156,13 +160,17 @@ class M69920:
         return 0
 
 
-    def lamp_ON(self, timeout_sec:int=45) -> int:
-        start = time.time()
+    def lamp_ON(self, retry:int=20) -> int:
+        count = 1
         self.logger.debug("Truing ON the Arc Lamp.")
         
-        while (not self.is_lamp_ON() and (time.time()-start)<timeout_sec):
+        while (not self.is_lamp_ON() and count < retry):
+            if count > 1:
+                self.logger.warning("Lamp ignition failed! Retrying...")
+                self.__init_lamp()
             self.serial_command("START")
-            time.sleep(5)
+            time.sleep(6)
+            count+=1
         
         if self.is_lamp_ON():
             self.logger.success("Arc Lamp turned ON.")
@@ -372,17 +380,15 @@ class M69920:
     def _get_lamp_id(self):
         pass
     
-    def lamp_shut_down(self) -> None:
+    def lamp_shut_down(self) -> int:
         self.lamp_OFF()
-        self.set_lamp_current(0.0)
-        self.set_lamp_power(0.0)
         self.unlock_front_panel()
-        pass
+        return 0
 
     def close(self) -> None:
-        if self.serial_port is not None:
+        if self.serial is not None:
             self.lamp_shut_down()
             self.serial.close()
             del self.serial
-        self.logger.info(f"CLOSED - Arc lamp's power supply \"{self.device_id}\"\n\n\n")
+        self.logger.info(f"CLOSED - Arc lamp's power supply.\n\n\n")
         pass

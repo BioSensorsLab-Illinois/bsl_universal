@@ -13,7 +13,7 @@ class CS260B:
         if self.__visa_connect(device_sn) == 0:
             self.logger.device_id = self.device_id
             self.__equipmnet_init()
-            self.logger.success(f"READY - Newport CS260B Monochromator \"{self.device_id}\"\.\n\n\n")
+            self.logger.success(f"READY - Newport CS260B Monochromator.\n\n\n")
         else:
             self.logger.error(f"FAILED to connect to Newport CS260B Monochromator ({device_sn})!\n\n\n")
             raise bsl_type.DeviceConnectionFailed
@@ -54,7 +54,7 @@ class CS260B:
         """
         self._com.write("FINDHOME")
         self.get_idle(blocking=True)
-        self.logger.debug("Device grating is homed.")
+        self.logger.info("Device grating is homed.")
         return 0
 
 
@@ -119,7 +119,7 @@ class CS260B:
         if cur_shutter != 1:
             self.logger.error(f"Failed to open the input shutter!")
             raise bsl_type.DeviceInconsistentError
-        self.logger.debug("Device input shutter is OPENED.")
+        self.logger.info("Device input shutter is OPENED.")
         return 0
     
 
@@ -135,7 +135,7 @@ class CS260B:
         if cur_shutter != 0:
             self.logger.error(f"Failed to open the input shutter!")
             raise bsl_type.DeviceInconsistentError
-        self.logger.debug("Device input shutter is CLOSED.")
+        self.logger.info("Device input shutter is CLOSED.")
         return 0
 
 
@@ -180,7 +180,7 @@ class CS260B:
         if round(cur_wavelength) != round(wavelength):
             self.logger.error(f"Failed to set output wavelength to {wavelength:.3f}! Readback wavelength @ {cur_wavelength:.3f}!")
             raise bsl_type.DeviceInconsistentError
-        self.logger.debug(f"Device output wavelength set to {cur_wavelength}.")
+        self.logger.info(f"Device output wavelength set to {cur_wavelength}.")
         return 0    
 
 
@@ -215,14 +215,14 @@ class CS260B:
         #Check current grating setting before setting new grating:
         if self.get_grating() == grating:
             return 0
-
-        self._com.write(f"GRATing {grating}")
         self.logger.debug(f"Setting grating position to {grating}.")
+        self._com.write(f"GRATing {grating}")
         self.get_idle(blocking=True)        
         cur_grating = self.get_grating()
         if cur_grating != grating:
             self.logger.error(f"Failed to set grating pos. to {grating}, current grating pos, at {cur_grating}!")
             raise bsl_type.DeviceInconsistentError
+        self.logger.info(f"Grating position set to {grating}.")
         return 0
     
 
@@ -255,13 +255,14 @@ class CS260B:
         if self.get_filter() == filter:
             return 0
         
-        self._com.write(f"FILTER {filter}")
         self.logger.debug(f"Setting filter position to {filter}")
+        self._com.write(f"FILTER {filter}")
         self.get_idle(blocking=True)        
         cur_filter = self.get_filter()
         if cur_filter != filter:
             self.logger.error(f"Failed to set filter pos. to {filter}, current filter pos, at {cur_filter}!")
             raise bsl_type.DeviceInconsistentError
+        self.logger.info(f"Filter position to {filter}")
         return 0
     
 
@@ -288,7 +289,7 @@ class CS260B:
         if cur_outport != 2:
             self.logger.error(f"Failed to set output port to Axial!")
             raise bsl_type.DeviceInconsistentError
-        self.logger.debug("Device output port is set to Axial.")
+        self.logger.info("Device output port is set to Axial.")
         return 0
     
 
@@ -315,7 +316,7 @@ class CS260B:
         if cur_outport != 1:
             self.logger.error(f"Failed to set output port to Lateral!")
             raise bsl_type.DeviceInconsistentError
-        self.logger.debug("Device output port is set to Lateral.")
+        self.logger.info("Device output port is set to Lateral.")
         return 0
     
 
@@ -331,7 +332,7 @@ class CS260B:
             Current wavelength setting from the monochromator.
         """
         wavelength = float(self._com.query("WAVE?"))
-        self.logger.debug(f"Readback wavelength: {wavelength:.3f}")
+        self.logger.info(f"Readback wavelength: {wavelength:.3f}")
         return wavelength   
     
     
@@ -345,7 +346,7 @@ class CS260B:
             Current grating# setting from the monochromator.
         """
         grating = int(self._com.query("GRATing?").split(',')[0])
-        self.logger.debug(f"Readback #grating: {grating}")
+        self.logger.info(f"Readback #grating: {grating}")
         return grating   
     
 
@@ -359,7 +360,7 @@ class CS260B:
             Current ilter posiotion setting from the monochromator.
         """
         filter = int(self._com.query("FILTER?"))
-        self.logger.debug(f"Readback filter: {filter}")
+        self.logger.info(f"Readback filter: {filter}")
         return filter   
     
 
@@ -378,7 +379,7 @@ class CS260B:
             return 1
         elif resp == 'C':
             return 0
-        self.logger.debug(f"Device shutter status: {resp}")
+        self.logger.info(f"Device shutter status: {resp}")
         return -1
 
 
@@ -432,11 +433,11 @@ class CS260B:
         """
         resp = self._com.query("OUTPORT?")
         if resp == '1':
-            self.logger.debug(f"Device output port is LATERAL.")
+            self.logger.info(f"Device output port is LATERAL.")
         elif resp == '2':
-            self.logger.debug(f"Device output port is AXIAL.")
+            self.logger.info(f"Device output port is AXIAL.")
         else:
-            self.logger.debug(f"Device output port status: {resp}")
+            self.logger.info(f"Device output port status: {resp}")
         return int(resp)
     
 
