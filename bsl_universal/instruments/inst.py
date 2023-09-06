@@ -1,4 +1,4 @@
-from ._inst_lib.instruments import _HR4000CG, _M69920, _PM100D, _RS_7_1, _SP_2150, _mantisCam, _DC2200, _CS260B
+from ._inst_lib.instruments import _HR4000CG, _M69920, _PM100D, _RS_7_1, _SP_2150, _mantisCam, _DC2200, _CS260B, _Futek_USB_520
 from loguru import logger as __logger
 import sys as __sys
 
@@ -56,6 +56,12 @@ def SP_2150(device_sn:str="") -> _SP_2150.SP_2150:
     if not __is_logger_ready:
         init_logger()
     return _SP_2150.SP_2150(device_sn)
+
+# Instrument Class for Futek USB-520 Load Cell USB ADC
+def USB_520(device_sn:str="", tear_on_startup:bool = True, reverse_negative:bool = False) -> _Futek_USB_520.USB_520:
+    if not __is_logger_ready:
+        init_logger()
+    return _Futek_USB_520.USB_520(device_sn, tear_on_startup=tear_on_startup, reverse_negative=reverse_negative)
 
 def mantisCam(device_sn:str="", is_GSENSE:bool = False) -> _mantisCam.MantisCamCtrl:
     if not __is_logger_ready:

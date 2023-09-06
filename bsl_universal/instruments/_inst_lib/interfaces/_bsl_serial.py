@@ -41,6 +41,10 @@ class _bsl_serial:
         #Search for target device with the name of the USB device.
         for port in com_ports_list:
             temp_port = None
+
+            if self.inst.SERIAL_SN in port[0]:
+                logger_opt.debug(f"    Specified device <light-blue><italic>{self.inst.MODEL}</italic></light-blue> with Serial SN <light-blue><italic>{self.inst.SERIAL_SN}</italic></light-blue> found on port <light-blue><italic>{port[0]}</italic></light-blue> by Device Serial SN search.")
+                temp_port = port[0]
             
             if self.inst.SERIAL_NAME in port[1]:
                 logger_opt.debug(f"    Specified device <light-blue><italic>{self.inst.MODEL}</italic></light-blue> with Serial_Name <light-blue><italic>{self.inst.SERIAL_NAME}</italic></light-blue> found on port <light-blue><italic>{port[0]}</italic></light-blue> by Device name search.")
@@ -85,22 +89,34 @@ class _bsl_serial:
                 # Try to open the serial port
                 with serial.Serial(temp_port, baudrate, timeout=0.1) as device:
                     logger_opt.trace(f"        Connected to <light-blue><italic>{device.name}</italic></light-blue> on port <light-blue><italic>{temp_port}</italic></light-blue>")
-                    # Query the device with QUERY_CMD
+                    
+                    # If no QUERY_CMD is provided, return the port and baudrate
+                    if self.inst.QUERY_CMD == "N/A":
+                        return (temp_port, baudrate) 
+                    
+                    # Query the device with QUERY_CMD if provided
                     device.reset_input_buffer()
-                    device.write(bytes(self.inst.QUERY_CMD,'ascii'))
+                    device.write(bytes(self.inst.QUERY_CMD,'utf-8'))
                     logger_opt.trace(f"        Querry <light-blue><italic>{repr(self.inst.QUERY_CMD)}</italic></light-blue> sent to <light-blue><italic>{device.name}</italic></light-blue>")
                     time.sleep(0.5)
-                    resp = repr(device.read(100).decode("ascii")).strip('\n\r')
+                    try:
+                        resp = repr(device.read(100).decode("utf-8")).strip('\n\r')
+                    except:
+                        resp = "ERROR in interpreting as UTF-8."
                     logger_opt.trace(f"        Response from <light-blue><italic>{device.name}</italic></light-blue>: {resp}")
+                    
                     # Check if the response contains expected string and s/n number, if true, port found.
                     if self.inst.QUERY_E_RESP in resp:
+                        if self.inst.QUERY_SN_CMD == "N/A":
+                            return (temp_port, baudrate) 
+                        
                         logger_opt.info(f"        <light-blue><italic>{self.inst.MODEL}</italic></light-blue> found on serial bus on port <light-blue><italic>{temp_port}</italic></light-blue>.")
                         # Check S/N to confirm matching
-                        device.reset_input_buffer()
-                        device.write(bytes(self.inst.QUERY_SN_CMD,'ascii'))
+                        device.reset_input_buffer() 
+                        device.write(bytes(self.inst.QUERY_SN_CMD,'utf-8'))
                         logger_opt.trace(f"        Querry <light-blue><italic>{repr(self.inst.QUERY_SN_CMD)}</italic></light-blue> sent to <light-blue><italic>{device.name}</italic></light-blue>")
                         time.sleep(0.5)
-                        resp = (device.read(100).decode("ascii")).strip('\n\r')
+                        resp = (device.read(100).decode("utf-8")).strip('\n\r')
                         logger_opt.trace(f"        Response from <light-blue><italic>{device.name}</italic></light-blue>: {resp}")
                         # Use provided regular expression to extract device S/N number
                         device_id = re.search(self.inst.SN_REG, resp).group(0)
@@ -119,12 +135,12 @@ class _bsl_serial:
         return None,None
 
     def readline(self) -> str:
-        resp = self.serial_port.readline().decode("ascii")
+        resp = self.serial_port.readline().decode("utf-8")
         logger_opt.trace(f"        {self.inst.MODEL} - com-Serial - Resp from {self.inst.MODEL} with {repr(resp)}")
         return resp.strip('\n\r')
     
     def read(self, n_bytes:int) -> str:
-        resp = self.serial_port.read(n_bytes).decode("ascii")
+        resp = self.serial_port.read(n_bytes).decode("utf-8")
         logger_opt.trace(f"        {self.inst.MODEL} - com-Serial - Resp from {self.inst.MODEL} with {repr(resp)}")
         return resp.strip('\n\r')
 
@@ -135,12 +151,12 @@ class _bsl_serial:
 
     def write(self, msg:str) -> int:
         logger_opt.trace(f"        {self.inst.MODEL} - com-Serial - Write to {self.inst.MODEL} with {repr(msg)}")
-        return self.serial_port.write(bytes(msg, 'ascii'))
+        return self.serial_port.write(bytes(msg, 'utf-8'))
     
     def writeline(self, msg:str) -> int:
         msg = msg +'\r\n'
         logger_opt.trace(f"        {self.inst.MODEL} - com-Serial - Write to {self.inst.MODEL} with {repr(msg)}")
-        return self.serial_port.write(bytes(msg, 'ascii'))
+        return self.serial_port.write(bytes(msg, 'utf-8'))
 
     def query(self, cmd:str) -> str:
         self.flush_read_buffer()
