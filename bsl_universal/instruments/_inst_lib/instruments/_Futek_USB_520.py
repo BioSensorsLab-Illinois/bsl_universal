@@ -113,6 +113,8 @@ class USB_520:
                 else:
                     if enable_tear:
                         force -= self.tear_calibration
+                    if self.flip_result:
+                        force *= -1
                     return force
 
         self.logger.warning(f"Timeout! No new measurement received in {timeout_ms}ms.")
