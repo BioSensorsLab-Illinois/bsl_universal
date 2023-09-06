@@ -38,6 +38,18 @@ class _bsl_inst_info_list:
         QUERY_E_RESP="69920"
     )
 
+    USB_520 = _bsl_inst_info_class(
+        MANUFACTURE="Futek",
+        MODEL="USB_520",
+        TYPE="USB ADC for Load Cells",
+        INTERFACE="Serial",
+        BAUDRATE=9600,
+        SERIAL_SN="1066659",
+        # QUERY_CMD="",
+        QUERY_E_RESP="g"
+    )
+    
+
     CS260B = _bsl_inst_info_class(
         MANUFACTURE="Newport Corp.",
         MODEL="CS260B-Q-MC-D",
