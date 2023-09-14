@@ -2,11 +2,13 @@ from ..interfaces._bsl_serial import _bsl_serial as bsl_serial
 from ..headers._bsl_inst_info import _bsl_inst_info_list as inst
 from ..headers._bsl_logger import _bsl_logger as bsl_logger
 from ..headers._bsl_type import _bsl_type as bsl_type
-
-import time, re
+import time, re, enum
 
 class USB_520:
-    def __init__(self, device_sn="", tear_on_startup:bool = True, reverse_negative:bool = True) -> None:
+    class USB_520_SN(enum.Enum):
+        CHAN1 = '1066659'; CHAN2 = '106'; CHAN3 = '106'; CHAN4 = '106'
+
+    def __init__(self, device_sn='', tear_on_startup:bool = True, reverse_negative:bool = True) -> None:
         """
         Read the latest force measurement from the device in grams.
 
@@ -29,18 +31,32 @@ class USB_520:
         status : `int`
             0 if successful, otherwise raise an exception.
         """
+        if "CHAN" in device_sn:
+            device_sn = self.USB_520_SN[device_sn].value
+            
         self._target_device_sn = device_sn
         self.inst = inst.USB_520
         self.flip_result = reverse_negative
         self.device_id = ""
         self.logger = bsl_logger(self.inst)
         self.logger.info(f"Initiating bsl_instrument - Futek USB_520({device_sn})...")
- 
-        if self._serial_connect():
-            self.logger.device_id = self.device_id
-            self.__system_init(tear_on_startup)
-            self.logger.success(f"READY - Futek USB DAC.\n\n\n")
-            return None
+
+        self.serial = None
+        if self._target_device_sn is not '':
+            if self._serial_connect():
+                self.logger.device_id = self.device_id
+                self.__system_init(tear_on_startup)
+                self.logger.success(f"READY - Futek USB DAC.\n\n\n")
+                return None
+
+        for target_sn in self.USB_520_SN.value:
+            self._target_device_sn = target_sn
+            if self._serial_connect():
+                self.logger.device_id = self.device_id
+                self.__system_init(tear_on_startup)
+                self.logger.success(f"READY - Futek USB DAC.\n\n\n")
+                return None
+        
         self.logger.error(f"FAILED to connect to Futek USB DAC!\n\n\n")
         raise bsl_type.DeviceConnectionFailed
 

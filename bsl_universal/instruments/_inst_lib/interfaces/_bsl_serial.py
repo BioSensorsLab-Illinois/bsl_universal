@@ -43,15 +43,19 @@ class _bsl_serial:
             temp_port = None
 
             if self.inst.SERIAL_SN in port[0]:
-                logger_opt.debug(f"    Specified device <light-blue><italic>{self.inst.MODEL}</italic></light-blue> with Serial SN <light-blue><italic>{self.inst.SERIAL_SN}</italic></light-blue> found on port <light-blue><italic>{port[0]}</italic></light-blue> by Device Serial SN search.")
+                logger_opt.info(f"    Specified device <light-blue><italic>{self.inst.MODEL}</italic></light-blue> with Serial SN <light-blue><italic>{self.inst.SERIAL_SN}</italic></light-blue> found on port <light-blue><italic>{port[0]}</italic></light-blue> by Device Serial SN search.")
+                temp_port = port[0]
+
+            if self.target_device_sn in port[0]:
+                logger_opt.info(f"    Specified device <light-blue><italic>{self.inst.MODEL}</italic></light-blue> with Serial SN <light-blue><italic>{self.target_device_sn}</italic></light-blue> found on port <light-blue><italic>{port[0]}</italic></light-blue> by Device Serial SN search.")
                 temp_port = port[0]
             
             if self.inst.SERIAL_NAME in port[1]:
-                logger_opt.debug(f"    Specified device <light-blue><italic>{self.inst.MODEL}</italic></light-blue> with Serial_Name <light-blue><italic>{self.inst.SERIAL_NAME}</italic></light-blue> found on port <light-blue><italic>{port[0]}</italic></light-blue> by Device name search.")
+                logger_opt.info(f"    Specified device <light-blue><italic>{self.inst.MODEL}</italic></light-blue> with Serial_Name <light-blue><italic>{self.inst.SERIAL_NAME}</italic></light-blue> found on port <light-blue><italic>{port[0]}</italic></light-blue> by Device name search.")
                 temp_port = port[0]
             
             if (self.inst.USB_PID in port[2]) or (str(int(self.inst.USB_PID,16)) in port[2]):
-                logger_opt.debug(f"    Specified device <light-blue><italic>{self.inst.MODEL}</italic></light-blue> with USB_PID: <light-blue><italic>{self.inst.USB_PID}</italic></light-blue> found on port <light-blue><italic>{port[0]}</italic></light-blue> by USB_PID search.")
+                logger_opt.info(f"    Specified device <light-blue><italic>{self.inst.MODEL}</italic></light-blue> with USB_PID: <light-blue><italic>{self.inst.USB_PID}</italic></light-blue> found on port <light-blue><italic>{port[0]}</italic></light-blue> by USB_PID search.")
                 temp_port = port[0]
             
             if temp_port is not None:
@@ -85,7 +89,7 @@ class _bsl_serial:
         # Try to communicate with the device with each possible baudrate
         try:
             for baudrate in baudrates:
-                logger_opt.debug(f"    Inquiring serial port <light-blue><italic>{temp_port}</italic></light-blue> with Baudrate={baudrate}")
+                logger_opt.info(f"    Inquiring serial port <light-blue><italic>{temp_port}</italic></light-blue> with Baudrate={baudrate}")
                 # Try to open the serial port
                 with serial.Serial(temp_port, baudrate, timeout=0.1) as device:
                     logger_opt.trace(f"        Connected to <light-blue><italic>{device.name}</italic></light-blue> on port <light-blue><italic>{temp_port}</italic></light-blue>")
