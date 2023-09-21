@@ -2,7 +2,7 @@ from ..interfaces._bsl_visa import _bsl_visa as bsl_visa
 from ..headers._bsl_inst_info import _bsl_inst_info_list as inst
 from ..headers._bsl_logger import _bsl_logger as bsl_logger
 from ..headers._bsl_type import _bsl_type as bsl_type
-import time, sys,
+import time, sys
 
 class PM100D:
     def __init__(self, device_sn:str="") -> None:

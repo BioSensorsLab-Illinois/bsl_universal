@@ -44,8 +44,8 @@ class _bsl_inst_info_list:
         TYPE="USB ADC for Load Cells",
         INTERFACE="Serial",
         BAUDRATE=9600,
-        SERIAL_SN="1066659",
-        # QUERY_CMD="",
+        SERIAL_SN="N/A",
+        QUERY_SN_CMD = "N/A",
         QUERY_E_RESP="g"
     )
     

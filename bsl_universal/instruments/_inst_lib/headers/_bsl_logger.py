@@ -17,7 +17,7 @@ class _bsl_logger:
 
     def error(self, msg:str="") -> None:
         logger.error(f"ERROR - {self.__inst.MODEL}  ({self.device_id})- {msg}")
-        raise bsl_type.DeviceOperationError
+        # raise bsl_type.DeviceOperationError
 
     def warning(self, msg:str="") -> None:
         logger.warning(f"    {self.__inst.MODEL}  ({self.device_id}) - {msg}")

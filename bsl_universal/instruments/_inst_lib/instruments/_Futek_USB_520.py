@@ -6,7 +6,7 @@ import time, re, enum
 
 class USB_520:
     class USB_520_SN(enum.Enum):
-        CHAN1 = '1066659'; CHAN2 = '106'; CHAN3 = '106'; CHAN4 = '106'
+        CH1 = '1066656'; CH2 = '1066657'; CH3 = '1066658'; CH4 = '1066659'
 
     def __init__(self, device_sn='', tear_on_startup:bool = True, reverse_negative:bool = True) -> None:
         """
@@ -31,7 +31,7 @@ class USB_520:
         status : `int`
             0 if successful, otherwise raise an exception.
         """
-        if "CHAN" in device_sn:
+        if "CH" in device_sn:
             device_sn = self.USB_520_SN[device_sn].value
             
         self._target_device_sn = device_sn
@@ -42,17 +42,20 @@ class USB_520:
         self.logger.info(f"Initiating bsl_instrument - Futek USB_520({device_sn})...")
 
         self.serial = None
-        if self._target_device_sn is not '':
+        if self._target_device_sn != "":
             if self._serial_connect():
-                self.logger.device_id = self.device_id
+                self.logger.device_id = self.serial.device_id.split('-')[-1]
                 self.__system_init(tear_on_startup)
                 self.logger.success(f"READY - Futek USB DAC.\n\n\n")
                 return None
+            self.logger.error(f"FAILED to connect to Futek USB DAC!\n\n\n")
+            raise bsl_type.DeviceConnectionFailed
 
-        for target_sn in self.USB_520_SN.value:
+        for target_sn in self.USB_520_SN:
+            target_sn = target_sn.value
             self._target_device_sn = target_sn
             if self._serial_connect():
-                self.logger.device_id = self.device_id
+                self.logger.device_id = self.serial.device_id.split('-')[-1]
                 self.__system_init(tear_on_startup)
                 self.logger.success(f"READY - Futek USB DAC.\n\n\n")
                 return None

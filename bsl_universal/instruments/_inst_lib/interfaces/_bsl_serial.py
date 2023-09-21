@@ -1,10 +1,9 @@
 from loguru import logger
 from ..headers._bsl_inst_info import _bsl_inst_info_list
-
-import time
 from serial.tools.list_ports import comports
-import serial
-import re
+import serial, subprocess, re, platform, time
+from ..headers._bsl_type import _bsl_type as bsl_type
+
 logger_opt = logger.opt(ansi=True)
 
 
@@ -47,6 +46,7 @@ class _bsl_serial:
                 temp_port = port[0]
 
             if self.target_device_sn in port[0]:
+                self.device_id = port[0]
                 logger_opt.info(f"    Specified device <light-blue><italic>{self.inst.MODEL}</italic></light-blue> with Serial SN <light-blue><italic>{self.target_device_sn}</italic></light-blue> found on port <light-blue><italic>{port[0]}</italic></light-blue> by Device Serial SN search.")
                 temp_port = port[0]
             
@@ -65,6 +65,10 @@ class _bsl_serial:
                     self.serial_port_name = temp_port
                     return True
                 continue
+
+        if self.target_device_sn != "" and self.inst.MODEL == "USB_520":
+            logger_opt.error(f"<light-blue><italic>{self.inst.MODEL} ({self.target_device_sn})</italic></light-blue> not found on serial ports.")
+            raise bsl_type.DeviceConnectionFailed
         
         logger.warning(f"    No device found based on USB_PID/VID or Serial Name search!")
         
@@ -85,6 +89,10 @@ class _bsl_serial:
             baudrates = list([self.inst.BAUDRATE])
         else:
             baudrates = list([4800,9600,19200,28800,38400,115200])
+        
+        if not self.is_port_free(temp_port):
+            logger_opt.warning(f"    BUSY - Device <light-blue><italic>{temp_port}</italic></light-blue> is busy, moving to next available device...")
+            return None,None
 
         # Try to communicate with the device with each possible baudrate
         try:
@@ -95,14 +103,13 @@ class _bsl_serial:
                     logger_opt.trace(f"        Connected to <light-blue><italic>{device.name}</italic></light-blue> on port <light-blue><italic>{temp_port}</italic></light-blue>")
                     
                     # If no QUERY_CMD is provided, return the port and baudrate
-                    if self.inst.QUERY_CMD == "N/A":
-                        return (temp_port, baudrate) 
-                    
-                    # Query the device with QUERY_CMD if provided
-                    device.reset_input_buffer()
-                    device.write(bytes(self.inst.QUERY_CMD,'utf-8'))
-                    logger_opt.trace(f"        Querry <light-blue><italic>{repr(self.inst.QUERY_CMD)}</italic></light-blue> sent to <light-blue><italic>{device.name}</italic></light-blue>")
-                    time.sleep(0.5)
+                    if self.inst.QUERY_CMD != "N/A":
+                        # Query the device with QUERY_CMD if provided
+                        device.reset_input_buffer()
+                        device.write(bytes(self.inst.QUERY_CMD,'utf-8'))
+                        logger_opt.trace(f"        Querry <light-blue><italic>{repr(self.inst.QUERY_CMD)}</italic></light-blue> sent to <light-blue><italic>{device.name}</italic></light-blue>")
+                        time.sleep(0.5)
+                    resp=""
                     try:
                         resp = repr(device.read(100).decode("utf-8")).strip('\n\r')
                     except:
@@ -130,7 +137,7 @@ class _bsl_serial:
                             self.device_id = device_id.strip('\r\n')
                             return (temp_port, baudrate) 
                         # Able to confirm device model number, but mismatch S/N number
-                        logger_opt.warning(f"    S/N Mismatch - Device <light-blue><italic>{temp_port}</italic></light-blue> with S/N <light-blue><italic>{device_id} found, not {self.target_device_sn} as requested, moving to next available device...")
+                        logger_opt.warning(f"    S/N Mismatch - Device <light-blue><italic>{temp_port}</italic></light-blue> with S/N <light-blue><italic>{device_id}</italic></light-blue> found, not <light-blue><italic>{self.target_device_sn}</italic></light-blue> as requested, moving to next available device...")
                         break
                     device.close()
         except serial.SerialException:
@@ -183,6 +190,27 @@ class _bsl_serial:
         """
         self.serial_port.timeout = timeout
         pass
+
+    def is_port_free(self, port_name):
+        """
+        Check if the given serial port is busy/open by another process on macOS.
+        :param port_name: Full path to the device, e.g., '/dev/tty.usbserial'.
+        :return: True if the port is busy, False otherwise.
+        """
+        if platform.system() != "Darwin":
+            return True
+        
+        try:
+            # Use the lsof command to see if the port is open by any process.
+            result = subprocess.run(['lsof', port_name], capture_output=True, text=True)
+
+            # If the output contains the port name, it's open by some process.
+            if port_name in result.stdout:
+                return False
+            return True
+        except Exception as e:
+            print(f"Error: {e}")
+            return True
 
     def close(self) -> None:
         if self.serial_port is not None:
