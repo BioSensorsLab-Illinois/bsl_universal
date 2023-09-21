@@ -7,7 +7,7 @@ from loguru import logger
 import re, os
 
 class mantis_folder:
-    def __init__(self, path:Path, sort_with_exp:bool=False):
+    def __init__(self, path:Path, sort_with_exp:bool=False, x3_conv:bool=False, x3_conv_param=0.48):
         """
         Load objects points for a folder of mantisCam recording files.
 
@@ -25,9 +25,11 @@ class mantis_folder:
         if type(path) is str:
             path = Path(path)
         self.path = path
+        self.x3_conv = x3_conv
+        self.x3_conv_param = x3_conv_param
         self.__videos = dict()
         self.__init_mantis_video_dict(sort_with_exp)
-
+        
     def __extract_time_key(self, file_name):
         match = re.search(r'\d+\.\d+(?=ms)', file_name)
         return float(match.group())  # Extract the float value from the time string without the 'ms' unit
@@ -35,7 +37,7 @@ class mantis_folder:
     def __init_mantis_video_dict(self, sort_with_exp:bool=True):
         filepaths = [f for f in self.path.iterdir() if f.is_file() and f.suffix == '.h5']
         for filepath in filepaths:
-            self.__videos[filepath.name] = mantis_file(filepath)
+            self.__videos[filepath.name] = mantis_file(filepath, x3_conv=self.x3_conv, conv_param=self.x3_conv_param)
         if(sort_with_exp):
             self.__videos = dict(sorted(self.__videos.items(), key=lambda item: self.__extract_time_key(item[0])))
 

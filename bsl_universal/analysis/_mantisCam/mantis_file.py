@@ -1,4 +1,4 @@
-import h5py
+import h5py,cv2,concurrent.futures
 import numpy as np
 from pathlib import Path
 from loguru import logger
@@ -9,12 +9,42 @@ from loguru import logger
 (GS_BLUE_X, GS_BLUE_Y) = (2,2)
 
 class mantis_file:
-    def __init__(self, path: Path):
+    def __init__(self, path: Path, x3_conv: bool = False, conv_param: float = 0.48):
         logger.trace(f"Init mantisCam video file {path}.")
         self.path = path
+        self.x3_conv = x3_conv
+        self.conv_param = conv_param
 
     def __getitem__(self, i) -> np.ndarray:
-        return self.frames[i]
+        if self.x3_conv:
+            with h5py.File(self.path, 'r') as file:
+                return self.__conv_opencv(np.array(file['camera']['frames'][i]))
+        else:
+            with h5py.File(self.path, 'r') as file:
+                return np.array(file['camera']['frames'][i])
+    
+
+    def __conv_opencv(self, frames: np.ndarray) -> np.ndarray:
+        filter = np.array([[1 +  self.conv_param, - self.conv_param]])
+        if len(frames.shape) == 4:
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                futures = {executor.submit(self.__process_frame_cv2, frame, filter): i for i, frame in enumerate(frames)}
+            
+                results = [None] * len(frames)
+                for future in concurrent.futures.as_completed(futures):
+                    # Retrieve original index of the frame
+                    index = futures[future]
+                    results[index] = future.result()
+                return np.array(results)
+        else:
+            return self.__process_frame_cv2(frames,filter)
+
+
+    def __process_frame_cv2(self, frame: np.ndarray, filter: np.ndarray) -> np.ndarray:
+        # Ensure the frame is float for proper convolution. Convert it back to uint16 later.
+        frame_float = np.flip(frame).astype(np.float32)
+        result = cv2.filter2D(frame_float, -1, filter)
+        return np.roll(np.flip(result), 1, axis=1)
     
 
     @property
@@ -36,7 +66,10 @@ class mantis_file:
         numpy.ndarray[#frame, #rows, #cols, #channels]
         '''
         with h5py.File(self.path, 'r') as file:
-            return np.array(file['camera']['frames'])
+            if self.x3_conv:
+                return self.__conv_opencv(np.array(file['camera']['frames']))
+            else:
+                return np.array(file['camera']['frames'])
 
     @property
     def exposure_times(self) -> np.ndarray:
