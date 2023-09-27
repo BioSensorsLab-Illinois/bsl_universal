@@ -190,6 +190,29 @@ class PM100D:
         power = float(self._com.query("MEAS:POW?"))
         self.logger.info(f"Current Power measured: {power*1000:.2f}mW.")
         return power
+    
+    def get_measured_power_avg(self, avg:int=1) -> float:
+        """
+        - Get one power measurement form the power meter 
+        with amount of `average_count` individual measurements.
+        The final result is the average of all of theindividual 
+        measurements.
+
+        - Each measurement is approximately `3 * average_count`ms.
+
+        Returns
+        --------
+        power : `float`
+            The average of all of theindividual measurements.
+        """
+        cnt = 0
+        power = 0
+        while cnt<avg:
+            cnt+=1
+            power += float(self._com.query("MEAS:POW?"))
+        power = power/avg
+        self.logger.info(f"Avg Power measured: {power*1000:.2f}mW.")
+        return power
         
     #un tested
     def get_power_measuring_range(self) -> int:
@@ -230,7 +253,7 @@ class PM100D:
         """
         resp = self._com.query("SENS:POW:RANG:AUTO?")
         auto_range = bool(int(resp))
-        self.logger.info(f"Current Auto_range status: {repr(self.auto_range)}.")
+        self.logger.info(f"Current Auto_range status: {repr(auto_range)}.")
         return auto_range
     
     def set_auto_range(self, auto:bool = True) -> None:
@@ -316,7 +339,7 @@ class PM100D:
         """
         resp = self._com.query("MEAS:CURR?")
         current = float(resp)
-        self.logger.info(f"Measured current: {self.current*1000:.1f}mA.")
+        self.logger.info(f"Measured current: {current*1000:.1f}mA.")
         return current
     
     def get_current_range(self) -> float:

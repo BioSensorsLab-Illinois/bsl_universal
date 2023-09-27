@@ -39,7 +39,7 @@ class _bsl_visa:
                 temp_com_port = self.visa_resource_manager.open_resource(port)
                 re_result = re.search(self.inst.SN_REG, temp_com_port.query(self.inst.QUERY_CMD).strip())
                 if re_result is not None:
-                    device_id = re_result.group(1)
+                    device_id = re_result.group(0)
                 else:
                     device_id = "UNABLE_TO_OBTAIN"
                 if self.target_device_sn not in device_id:
@@ -70,7 +70,7 @@ class _bsl_visa:
             if self.inst.QUERY_E_RESP not in self.device_id:
                 logger_opt.error(f"    FAILED - Wrong device identifier (E_RESP) is returned!")
                 raise _bsl_type.DeviceConnectionFailed
-            self.device_id = re.search(self.inst.SN_REG, self.device_id).group(1)
+            self.device_id = re.search(self.inst.SN_REG, self.device_id).group(0)
             logger_opt.success(f"    {self.inst.MODEL} with DEVICE_ID: <light-blue><italic>{self.device_id}</italic></light-blue> found and connected!")
         pass
 
