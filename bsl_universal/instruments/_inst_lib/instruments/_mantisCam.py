@@ -240,9 +240,9 @@ class MantisCamCtrl:
                 self.__zmq_recv()
                 if not self.is_recording:
                     break
-                if time.time() - time_start > (self.__e_exp_time * n_frames)/500 + 8:
-                    logger.error(f"ERROR - Unable to finish recording, timed out!")
-                    raise bsl_type.DeviceTimeOutError
+                if time.time() - time_start > (self.__e_exp_time * n_frames)/500 + 20:
+                    logger.error(f"ERROR - Unable to finish recording, timed out! timeout @ {time.time() - time_start:.0f} seconds.")
+                    # raise bsl_type.DeviceTimeOutError
         logger.info("Camera - Recording Finished!")
         
 

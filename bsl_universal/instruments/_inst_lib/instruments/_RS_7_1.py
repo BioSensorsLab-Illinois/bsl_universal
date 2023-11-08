@@ -664,6 +664,7 @@ class RS_7_1:
         self._com_cmd(f"CCS{CIEx:.6f},{CIEy:.6f}")
         self.logger.debug(f"Set output spectrum to CIExy chromaticity {CIEx:.6f},{CIEy:.6f}.")
         return self.get_chromaticity_output()
+        
 
     #checked
     def set_spectrum_black_body(
@@ -709,6 +710,72 @@ class RS_7_1:
         self.logger.info(f"Setting Output spectrum to Black Body spectrum with temperature: {temp} Kelvins.")
         self.set_spectrum_raw(spectrum, power=power, power_unit=power_unit, irr_distance_mm=irr_distance_mm)
         return self.get_color_temp()
+
+    def set_spectrum_hsv(
+        self, H:float, S:float, V:float,
+        power:float=0, power_unit:POWER_UNIT=POWER_UNIT.RADIANCE, irr_distance_mm:int=0
+        ) -> float:
+        """
+        - Set output spectrum to a specified HSV color profile.
+        
+        - Set `match_chrom = Ture` when calling set_`power_fitted_spectrum()`
+        to maintain the chromaticity matching. 
+
+        Uses
+        ----------
+        >>> set_spectrum_hsv(125,250,85,400)
+        >>> set_power_output(20, match_chrom=True)
+
+        Parameters
+        ----------
+        H : `float`
+            Hue from 0 to 360 degrees.
+
+        S : `float`
+            Saturation from 0 to 100 percent.
+
+        V : `float`
+            Value from 0 to 100.
+        
+        Returns
+        --------
+        RMS_Error : `float`
+            Root-Mean-Square error for the fitted specturm.
+        """
+
+        # Convert saturation and value to a range of 0 to 1
+        S /= 100.0
+        V /= 100.0
+        # Calculate the chroma
+        chroma = V * S
+
+        # Find the position within the hexagon
+        hue_prime = H / 60.0
+        x = chroma * (1 - abs(hue_prime % 2 - 1))
+
+        # Compute the intermediate RGB values based on the hue_prime
+        if hue_prime < 1:
+            r1, g1, b1 = chroma, x, 0
+        elif hue_prime < 2:
+            r1, g1, b1 = x, chroma, 0
+        elif hue_prime < 3:
+            r1, g1, b1 = 0, chroma, x
+        elif hue_prime < 4:
+            r1, g1, b1 = 0, x, chroma
+        elif hue_prime < 5:
+            r1, g1, b1 = x, 0, chroma
+        else:
+            r1, g1, b1 = chroma, 0, x
+
+        # Match the luminance by adding the same amount to each component
+        m = V - chroma
+        r, g, b = r1 + m, g1 + m, b1 + m
+
+        # Convert to 8-bit values
+        r, g, b = int(r * 255), int(g * 255), int(b * 255)
+
+        return self.set_spectrum_rgb(r,g,b,power,power_unit,irr_distance_mm)
+    
 
     #checked
     def set_spectrum_rgb(
@@ -913,7 +980,10 @@ class RS_7_1:
         """
         temp = self._com_query('CCT')
         if temp != "":
-            temp=float(temp)
+            try:
+                temp=float(temp)
+            except Exception:
+                temp = -1
         else:
             temp=0
         self.logger.debug(f"Current output spectrum's equivalence color temperature: {temp:.1f} Kelvins.")
@@ -929,7 +999,10 @@ class RS_7_1:
         RMS_Error : `float`
             Root-Mean-Square error for the fitted specturm vs. provided spectrum.
         """
-        erms = float(self._com_query("RPE"))
+        try:
+            erms = float(self._com_query("RPE"))
+        except Exception:
+            erms = -1
         self.logger.debug(f"Output spectrum matching RMS Error: {erms:.3f}.")
         return erms
 
