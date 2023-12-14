@@ -1,6 +1,6 @@
 from pathlib import Path
 import numpy as np
-from .mantis_file import mantis_file_GS
+from .mantis_file_GS import mantis_file_GS
 from numpy.typing import NDArray
 from tqdm import tqdm
 from loguru import logger
