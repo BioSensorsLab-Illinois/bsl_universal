@@ -15,7 +15,7 @@ class mantis_file_GS:
     Dark_Level_LG_FSI = 1000 
     Dark_Level_HG_FSI = 1300
 
-    def __init__(self, path: Path, imager_type:str="FSI", is_2x2:bool=False, origin=(0,0), R_loc=(1,2), G_loc=(2,1), B_loc=(2,2), SP_loc=(1,1)):
+    def __init__(self, path: Path, imager_type:str="FSI", is_2x2:bool=False, origin=(1,0), R_loc=(0,1), G_loc=(1,0), B_loc=(0,0), SP_loc=(1,1)):
         logger.trace(f"Init mantisCam video file {path}.")
         self.path = path
         self.is_2x2 = is_2x2
@@ -96,19 +96,19 @@ class mantis_file_GS:
     def frames_GS_high_gain(self) -> np.ndarray:
         with h5py.File(self.path) as file:
             if self.is_2x2:
-                frames_HG = self.frames[:,:,0:self.n_cols//2,0]
+                frames_HG = self.frames[:, :, 0:self.n_cols//2]
                 return frames_HG[:, self.origin[0]::2, self.origin[1]::2]
             else:
-                return self.frames[:,:,0:self.n_cols//2,0]
+                return self.frames[:, 0:self.n_cols//2, :]
 
     @property
     def frames_GS_low_gain(self) -> np.ndarray:
         with h5py.File(self.path) as file:
             if self.is_2x2:
-                frames_LG = self.frames[:,:,self.n_cols//2:,0]
+                frames_LG = self.frames[:, :, self.n_cols//2:]
                 return frames_LG[:, self.origin[0]::2, self.origin[1]::2]
             else:
-                return self.frames[:,:,self.n_cols//2:,0]
+                return self.frames[:, :, self.n_cols//2:]
             
     @property
     def frames_GS_high_gain_RGB(self) -> np.ndarray:
