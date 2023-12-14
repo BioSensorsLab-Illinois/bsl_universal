@@ -15,7 +15,7 @@ class mantis_file_GS:
     Dark_Level_LG_FSI = 1000 
     Dark_Level_HG_FSI = 1300
 
-    def __init__(self, path: Path, imager_type:str="FSI", is_2x2:bool=False, origin=(1,0), R_loc=(0,1), G_loc=(1,0), B_loc=(0,0), SP_loc=(1,1)):
+    def __init__(self, path: Path, imager_type:str="FSI", is_2x2:bool=False, origin=(1,0), R_loc=(0,1), G_loc=(1,0), B_loc=(0,0), SP_loc=(1,1), gamma:int=1):
         logger.trace(f"Init mantisCam video file {path}.")
         self.path = path
         self.is_2x2 = is_2x2
@@ -24,6 +24,7 @@ class mantis_file_GS:
         self.G_loc = G_loc
         self.B_loc = B_loc
         self.SP_loc = SP_loc
+        self.gamma = gamma
         if imager_type == "FSI":
             self.K_HG = self.K_HG_FSI
             self.K_LG = self.K_LG_FSI
@@ -47,14 +48,14 @@ class mantis_file_GS:
             else:
                 return np.array(file['camera']['frames'][i][:,:,0])
             
-    def __HDR_reconstruction(self, frame_HG, frame_LG, gamma:int=5) -> np.ndarray:
-        frames_HDR = np.zeros(self.frame_shape, dtype=np.float32)
+    def __HDR_reconstruction(self, frame_HG, frame_LG) -> np.ndarray:
+        frames_HDR = np.zeros(frame_HG.shape, dtype=np.float32)
         frames_HDR[frame_HG<=self.Threshold] = frame_HG[frame_HG<=self.Threshold]
         frames_HDR[frame_HG>self.Threshold]  = self.K_RATIO * frame_LG[frame_HG>self.Threshold] - self.param_b     
         frame_HDR = frames_HDR/65535.0
-        corrected_image = np.power(frame_HDR, 1/gamma)
+        corrected_image = np.power(frame_HDR, 1/self.gamma)
         return np.clip(corrected_image * 65535, 0, 65535).astype(np.uint16)
-    
+
     @property
     def file_name(self) -> str:
         return str(self.path.name)
@@ -137,15 +138,15 @@ class mantis_file_GS:
         return self.frames_GS_low_gain[:,self.SP_loc[0]::2,self.SP_loc[1]::2]
     
     @property
-    def frames_GS_HDR(self, gamma:int=5) -> np.ndarray:
+    def frames_GS_HDR(self) -> np.ndarray:
         return self.__HDR_reconstruction(frame_HG=self.frames_GS_high_gain, frame_LG=self.frames_GS_low_gain, gamma=gamma)
     
     @property
-    def frames_GS_HDR_RGB(self, gamma:int=5) -> np.ndarray:
+    def frames_GS_HDR_RGB(self) -> np.ndarray:
         return self.__HDR_reconstruction(frame_HG=self.frames_GS_high_gain_RGB, frame_LG=self.frames_GS_low_gain_RGB, gamma=gamma)
     
     @property
-    def frames_GS_HDR_SP(self, gamma:int=5) -> np.ndarray:
+    def frames_GS_HDR_SP(self) -> np.ndarray:
         return self.__HDR_reconstruction(frame_HG=self.frames_GS_high_gain_SP, frame_LG=self.frames_GS_low_gain_SP, gamma=gamma)
     
     
