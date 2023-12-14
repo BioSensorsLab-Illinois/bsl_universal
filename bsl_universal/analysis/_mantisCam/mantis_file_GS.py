@@ -100,7 +100,7 @@ class mantis_file_GS:
                 frames_HG = self.frames[:, :, 0:self.n_cols//2]
                 return frames_HG[:, self.origin[0]::2, self.origin[1]::2]
             else:
-                return self.frames[:, 0:self.n_cols//2, :]
+                return self.frames[:, :, 0:self.n_cols//2]
 
     @property
     def frames_GS_low_gain(self) -> np.ndarray:
@@ -139,15 +139,15 @@ class mantis_file_GS:
     
     @property
     def frames_GS_HDR(self) -> np.ndarray:
-        return self.__HDR_reconstruction(frame_HG=self.frames_GS_high_gain, frame_LG=self.frames_GS_low_gain, gamma=gamma)
+        return self.__HDR_reconstruction(frame_HG=self.frames_GS_high_gain, frame_LG=self.frames_GS_low_gain)
     
     @property
     def frames_GS_HDR_RGB(self) -> np.ndarray:
-        return self.__HDR_reconstruction(frame_HG=self.frames_GS_high_gain_RGB, frame_LG=self.frames_GS_low_gain_RGB, gamma=gamma)
+        return self.__HDR_reconstruction(frame_HG=self.frames_GS_high_gain_RGB, frame_LG=self.frames_GS_low_gain_RGB)
     
     @property
     def frames_GS_HDR_SP(self) -> np.ndarray:
-        return self.__HDR_reconstruction(frame_HG=self.frames_GS_high_gain_SP, frame_LG=self.frames_GS_low_gain_SP, gamma=gamma)
+        return self.__HDR_reconstruction(frame_HG=self.frames_GS_high_gain_SP, frame_LG=self.frames_GS_low_gain_SP)
     
     
     @property
