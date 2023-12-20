@@ -168,7 +168,7 @@ class PM100D:
         cnt : `int`
             Number of measurements made for each power measurement,
             the result is the average of all measurements.
-        """
+        """ 
         self._com.write("SENS:AVER:COUNT %i" % cnt)
         self.logger.info(f"Average count is set to {cnt}.")
         return self.get_average_count()
@@ -213,6 +213,24 @@ class PM100D:
         power = power/avg
         self.logger.info(f"Avg Power measured: {power*1000:.2f}mW.")
         return power
+    
+    def get_measured_power_density(self) -> float:
+        """
+        - Get one power density measurement (W/cm^2) from the power meter 
+        with amount of `average_count` individual measurements.
+        The final result is the average of all of the individual 
+        measurements.
+
+        - Each measurement is approximately `3 * average_count`ms.
+
+        Returns
+        --------
+        power_density : `float`
+            The average of all of the individual measurements.
+        """
+        power_density = float(self._com.query("MEAS:PDEN?"))
+        self.logger.info(f"Current Power Density measured: {power_density*1000:.2f}mW/cm^2.")
+        return power_density
         
     #un tested
     def get_power_measuring_range(self) -> int:
