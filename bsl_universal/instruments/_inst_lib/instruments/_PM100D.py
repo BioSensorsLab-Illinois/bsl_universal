@@ -45,6 +45,7 @@ class PM100D:
         self.get_attenuation_dB()
         self.get_average_count()
         self.get_measured_power()
+        self.get_measured_power_density()
         self.get_power_measuring_range()
         self.get_auto_range_status()
         self.get_measured_frequency()
@@ -210,6 +211,47 @@ class PM100D:
         while cnt<avg:
             cnt+=1
             power += float(self._com.query("MEAS:POW?"))
+        power = power/avg
+        self.logger.info(f"Avg Power measured: {power*1000:.2f}mW.")
+        return power
+    
+    def get_measured_power_density(self) -> float:
+        """
+        - Get one power density measurement form the power meter 
+        with amount of `average_count` individual measurements.
+        The final result is the average of all of theindividual 
+        measurements.
+
+        - Each measurement is approximately `3 * average_count`ms.
+
+        Returns
+        --------
+        power : `float`
+            (W/cm^2) The average of all of theindividual measurements.
+        """
+        power = float(self._com.query("MEAS:PDEN?"))
+        self.logger.info(f"Current Power measured: {power*1000:.2f}mW.")
+        return power
+    
+    def get_measured_power_density_avg(self, avg:int=1) -> float:
+        """
+        - Get one power density measurement form the power meter 
+        with amount of `average_count` individual measurements.
+        The final result is the average of all of theindividual 
+        measurements.
+
+        - Each measurement is approximately `3 * average_count`ms.
+
+        Returns
+        --------
+        power : `float`
+            (W/cm^2) The average of all of theindividual measurements.
+        """
+        cnt = 0
+        power = 0
+        while cnt<avg:
+            cnt+=1
+            power += float(self._com.query("MEAS:PDEN?"))
         power = power/avg
         self.logger.info(f"Avg Power measured: {power*1000:.2f}mW.")
         return power
