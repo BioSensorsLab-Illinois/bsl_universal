@@ -15,7 +15,7 @@ class mantis_file_GS:
     Dark_Level_LG_FSI = 1000 
     Dark_Level_HG_FSI = 1300
 
-    def __init__(self, path: Path, imager_type:str="FSI", is_2x2:bool=False, origin=(1,0), R_loc=(0,1), G_loc=(1,0), B_loc=(0,0), SP_loc=(1,1), gamma:int=1):
+    def __init__(self, path: Path, imager_type:str="FSI", is_2x2:bool=False, origin=(1,0), R_loc=(0,1), G_loc=(1,0), B_loc=(0,0), SP_loc=(1,1)):
         logger.trace(f"Init mantisCam video file {path}.")
         self.path = path
         self.is_2x2 = is_2x2
@@ -24,7 +24,6 @@ class mantis_file_GS:
         self.G_loc = G_loc
         self.B_loc = B_loc
         self.SP_loc = SP_loc
-        self.gamma = gamma
         if imager_type == "FSI":
             self.K_HG = self.K_HG_FSI
             self.K_LG = self.K_LG_FSI
@@ -47,14 +46,33 @@ class mantis_file_GS:
                 return np.array(file['camera']['frames'][i][self.origin[0]::2, self.origin[1]::2, 0])
             else:
                 return np.array(file['camera']['frames'][i][:,:,0])
+
+    def __tone_map_compress(self, hdr_image, power:float=0.5):
+        """
+        Apply tone mapping to the HDR image to compress midrange while making lowlights and highlights more visible.
+        """
+        # Apply tone mapping: here using a simple sigmoid function
+        return np.power(hdr_image, power)
+
+    def __tone_map_enhance(self, hdr_image, mid_tone:float=0.5, contrast:float=10):
+        """
+        Apply tone mapping to the HDR image to compress midrange while making lowlights and highlights more visible.
+        """
+        # Apply tone mapping: here using a simple sigmoid function
+        return  1 / (1 + np.exp(contrast * (mid_tone - hdr_image)))
+        
+
             
-    def __HDR_reconstruction(self, frame_HG, frame_LG) -> np.ndarray:
+    def __HDR_reconstruction(self, frame_HG, frame_LG, tone_maping:str="None", mid_tone:float=0.5, contrast:float=10, power:float=0.5) -> np.ndarray:
         frames_HDR = np.zeros(frame_HG.shape, dtype=np.float32)
         frames_HDR[frame_HG<=self.Threshold] = frame_HG[frame_HG<=self.Threshold]
         frames_HDR[frame_HG>self.Threshold]  = self.K_RATIO * frame_LG[frame_HG>self.Threshold] - self.param_b     
-        frame_HDR = frames_HDR/65535.0
-        corrected_image = np.power(frame_HDR, 1/self.gamma)
-        return np.clip(corrected_image * 65535, 0, 65535).astype(np.uint16)
+        frame_HDR = frames_HDR/(self.K_RATIO*65535 - self.param_b)
+        if tone_maping.lower() == "compress":
+            frame_HDR = self.__tone_map_compress(frame_HDR, power=power)
+        elif tone_maping.lower() == "enhance":
+            frame_HDR = self.__tone_map_enhance(frame_HDR, mid_tone=mid_tone, contrast=contrast)
+        return np.clip(frame_HDR * 65535, 0, 65535).astype(np.uint16)
 
     @property
     def file_name(self) -> str:
@@ -137,17 +155,14 @@ class mantis_file_GS:
         assert(self.is_2x2)
         return self.frames_GS_low_gain[:,self.SP_loc[0]::2,self.SP_loc[1]::2]
     
-    @property
-    def frames_GS_HDR(self) -> np.ndarray:
-        return self.__HDR_reconstruction(frame_HG=self.frames_GS_high_gain, frame_LG=self.frames_GS_low_gain)
+    def frames_GS_HDR(self, tone_mapping:str="None", mid_tone:float=0.5, contrast:float=10, power=0.5) -> np.ndarray:
+        return self.__HDR_reconstruction(frame_HG=self.frames_GS_high_gain, frame_LG=self.frames_GS_low_gain, tone_maping=tone_mapping, mid_tone=mid_tone, contrast=contrast, power=power)
     
-    @property
-    def frames_GS_HDR_RGB(self) -> np.ndarray:
-        return self.__HDR_reconstruction(frame_HG=self.frames_GS_high_gain_RGB, frame_LG=self.frames_GS_low_gain_RGB)
+    def frames_GS_HDR_RGB(self, tone_mapping:str="None", mid_tone:float=0.5, contrast:float=10, power=0.5) -> np.ndarray:
+        return self.__HDR_reconstruction(frame_HG=self.frames_GS_high_gain_RGB, frame_LG=self.frames_GS_low_gain_RGB, tone_maping=tone_mapping, mid_tone=mid_tone, contrast=contrast, power=power)
     
-    @property
-    def frames_GS_HDR_SP(self) -> np.ndarray:
-        return self.__HDR_reconstruction(frame_HG=self.frames_GS_high_gain_SP, frame_LG=self.frames_GS_low_gain_SP)
+    def frames_GS_HDR_SP(self, tone_mapping:str="None", mid_tone:float=0.5, contrast:float=10, power=0.5) -> np.ndarray:
+        return self.__HDR_reconstruction(frame_HG=self.frames_GS_high_gain_SP, frame_LG=self.frames_GS_low_gain_SP, tone_maping=tone_mapping, mid_tone=mid_tone, contrast=contrast, power=power)
     
     
     @property
