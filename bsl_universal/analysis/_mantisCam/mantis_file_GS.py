@@ -18,7 +18,42 @@ class mantis_file_GS:
     Dark_Level_LG_FSI = 1000 
     Dark_Level_HG_FSI = 1300
 
-    def __init__(self, path: Path, imager_type:str="FSI", is_2x2:bool=False, origin=(1,0), R_loc=(0,1), G_loc=(1,0), B_loc=(0,0), SP_loc=(1,1)):
+    def __init__(self, path: Path, imager_type:str="FSI", is_2x2:bool=False, origin=(0,0), R_loc=(0,1), G_loc=(1,0), B_loc=(0,0), SP_loc=(1,1)):
+        """
+        - Initialize the mantisCam video file.
+
+        Parameters
+        ----------
+        path : `Path`
+            Path to the video file.
+        
+        imager_type : `str` (Default: "FSI")
+            Type of the imager, either "FSI" or "BSI".
+
+        is_2x2 : `bool` (Default: False)
+            If the video from a 2x2 filter camera.
+        
+        origin : `tuple([int,int])` (Default: (1,0))
+            Origin of the image, default to (0,0) for 2x2 filter camera.
+
+        R_loc : `tuple([int,int])` (Default: (0,1))
+            Location of the red pixel, default to (0,1) for 2x2 filter camera.
+        
+        G_loc : `tuple([int,int])` (Default: (1,0))
+            Location of the green pixel, default to (1,0) for 2x2 filter camera.
+        
+        B_loc : `tuple([int,int])` (Default: (0,0))
+            Location of the blue pixel, default to (0,0) for 2x2 filter camera.
+        
+        SP_loc : `tuple([int,int])` (Default: (1,1))
+            Location of the special pixel, default to (1,1) for 2x2 filter camera.
+        
+        Returns
+        -------
+        result : `int`
+            0 if success, -1 if fail
+        """
+
         logger.trace(f"Init mantisCam video file {path}.")
         self.path = path
         self.is_2x2 = is_2x2
@@ -79,6 +114,14 @@ class mantis_file_GS:
 
     @property
     def file_name(self) -> str:
+        """
+        - Return the file name of the video file.
+
+        Returns
+        -------
+        result : `str`
+            File name of the video file.
+        """
         return str(self.path.name)
 
     @property
@@ -116,6 +159,14 @@ class mantis_file_GS:
 
     @property
     def frames_GS_high_gain(self) -> np.ndarray:
+        """
+        - Return the frames from the high gain channel of the video file.
+
+        Returns
+        -------
+        result : `np.ndarray`
+            Frames from the high gain channel of the video file.
+        """
         with h5py.File(self.path) as file:
             if self.is_2x2:
                 frames_HG = self.frames[:, :, 0:self.n_cols//2]
@@ -125,6 +176,14 @@ class mantis_file_GS:
 
     @property
     def frames_GS_low_gain(self) -> np.ndarray:
+        """
+        - Return the frames from the low gain channel of the video file.
+
+        Returns
+        -------
+        result : `np.ndarray`
+            Frames from the low gain channel of the video file.
+        """
         with h5py.File(self.path) as file:
             if self.is_2x2:
                 frames_LG = self.frames[:, :, self.n_cols//2:]
@@ -191,13 +250,94 @@ class mantis_file_GS:
         return self.frames_GS_low_gain[:,self.SP_loc[0]::2,self.SP_loc[1]::2]
     
     def frames_GS_HDR(self, tone_mapping:str="None", mid_tone:float=0.5, contrast:float=10, power=0.5) -> np.ndarray:
+        """
+        - Return the HDR reconstructed frames from the video file.
+
+        Parameters
+        ----------
+        tone_mapping : `str` (Default: "None")
+            Tone mapping method to be applied to the HDR image. 
+            Available options: "None", "compress", "enhance".
+
+            - "None": No tone mapping applied, the result frames are linearly combined by the conversion function.
+            - "compress": Apply tone mapping to compress midrange while making lowlights and highlights more visible.
+            - "enhance": Apply tone mapping to enhance midrange while making lowlights and highlights more visible.
+
+        mid_tone : `float` (Default: 0.5)
+            Midtone value for the "enhance" tone mapping.
+        
+        contrast : `float` (Default: 10)
+            Contrast value for the "enhance" tone mapping.
+        
+        power : `float` (Default: 0.5)
+            Power value for the "compress" tone mapping.
+        
+        Returns
+        -------
+        result : `np.ndarray`
+            HDR reconstructed frames from the video file.
+        """
         return self.__HDR_reconstruction(frame_HG=self.frames_GS_high_gain, frame_LG=self.frames_GS_low_gain, tone_maping=tone_mapping, mid_tone=mid_tone, contrast=contrast, power=power)
     
     def frames_GS_HDR_RGB(self, tone_mapping:str="None", mid_tone:float=0.5, contrast:float=10, power=0.5) -> np.ndarray:
+        """
+        - Return the HDR reconstructed frames from the RGB video file.
+
+        Parameters
+        ----------
+        tone_mapping : `str` (Default: "None")
+            Tone mapping method to be applied to the HDR image. 
+            Available options: "None", "compress", "enhance".
+
+            - "None": No tone mapping applied, the result frames are linearly combined by the conversion function.
+            - "compress": Apply tone mapping to compress midrange while making lowlights and highlights more visible.
+            - "enhance": Apply tone mapping to enhance midrange while making lowlights and highlights more visible.
+
+        mid_tone : `float` (Default: 0.5)
+            Midtone value for the "enhance" tone mapping.
+        
+        contrast : `float` (Default: 10)
+            Contrast value for the "enhance" tone mapping.
+        
+        power : `float` (Default: 0.5)
+            Power value for the "compress" tone mapping.
+        
+        Returns
+        -------
+        result : `np.ndarray`
+            HDR reconstructed frames from the video file.
+        """
         HDRraw = self.__HDR_reconstruction(frame_HG=self.frames_GS_high_gain, frame_LG=self.frames_GS_low_gain, tone_maping=tone_mapping, mid_tone=mid_tone, contrast=contrast, power=power)
         return self.__demoasic_SP(HDRraw)
     
     def frames_GS_HDR_SP(self, tone_mapping:str="None", mid_tone:float=0.5, contrast:float=10, power=0.5) -> np.ndarray:
+        """
+        - Return the HDR reconstructed frames from the Special pixel video file.
+
+        Parameters
+        ----------
+        tone_mapping : `str` (Default: "None")
+            Tone mapping method to be applied to the HDR image. 
+            Available options: "None", "compress", "enhance".
+
+            - "None": No tone mapping applied, the result frames are linearly combined by the conversion function.
+            - "compress": Apply tone mapping to compress midrange while making lowlights and highlights more visible.
+            - "enhance": Apply tone mapping to enhance midrange while making lowlights and highlights more visible.
+
+        mid_tone : `float` (Default: 0.5)
+            Midtone value for the "enhance" tone mapping.
+        
+        contrast : `float` (Default: 10)
+            Contrast value for the "enhance" tone mapping.
+        
+        power : `float` (Default: 0.5)
+            Power value for the "compress" tone mapping.
+        
+        Returns
+        -------
+        result : `np.ndarray`
+            HDR reconstructed frames from the video file.
+        """
         return self.__HDR_reconstruction(frame_HG=self.frames_GS_high_gain_SP, frame_LG=self.frames_GS_low_gain_SP, tone_maping=tone_mapping, mid_tone=mid_tone, contrast=contrast, power=power)
     
     
