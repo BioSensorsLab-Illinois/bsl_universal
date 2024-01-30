@@ -2,6 +2,9 @@ import h5py
 import numpy as np
 from pathlib import Path
 from loguru import logger
+import colour
+from colour_demosaicing import (
+    demosaicing_CFA_Bayer_Menon2007)
 
 class mantis_file_GS:
     K_HG_BSI = 1.813 * 16
@@ -128,22 +131,54 @@ class mantis_file_GS:
                 return frames_LG[:, self.origin[0]::2, self.origin[1]::2]
             else:
                 return self.frames[:, :, self.n_cols//2:]
+
             
     @property
     def frames_GS_high_gain_RGB(self) -> np.ndarray:
         assert(self.is_2x2)
-        R = self.frames_GS_high_gain[:,self.R_loc[0]::2,self.R_loc[1]::2]
-        G = self.frames_GS_high_gain[:,self.G_loc[0]::2,self.G_loc[1]::2]
-        B = self.frames_GS_high_gain[:,self.B_loc[0]::2,self.B_loc[1]::2]
-        return np.stack((R,G,B), axis=-1)
+        R = self.frames_GS_high_gain[:,self.R_loc[0]::2,self.R_loc[1]::2]/65535.0
+        G = self.frames_GS_high_gain[:,self.G_loc[0]::2,self.G_loc[1]::2]/65535.0
+        B = self.frames_GS_high_gain[:,self.B_loc[0]::2,self.B_loc[1]::2]/65535.0
+        bayer = np.zeros((self.n_frames, 1024, 1024), dtype=np.float32)
+        RGB = np.zeros((self.n_frames, 1024, 1024, 3), dtype=np.uint16)
+        bayer[:,0::2,0::2] = R
+        bayer[:,1::2,0::2] = G
+        bayer[:,0::2,1::2] = G
+        bayer[:,1::2,1::2] = B
+        for i in range(self.n_frames):
+            RGB[i] = np.round(colour.cctf_encoding(demosaicing_CFA_Bayer_Menon2007(bayer[i], 'RGGB')) * 65535).astype(np.uint16)
+        return RGB
             
     @property
     def frames_GS_low_gain_RGB(self) -> np.ndarray:
         assert(self.is_2x2)
-        R = self.frames_GS_low_gain[:,self.R_loc[0]::2,self.R_loc[1]::2]
-        G = self.frames_GS_low_gain[:,self.G_loc[0]::2,self.G_loc[1]::2]
-        B = self.frames_GS_low_gain[:,self.B_loc[0]::2,self.B_loc[1]::2]
-        return np.stack((R,G,B), axis=-1)
+        R = self.frames_GS_low_gain[:,self.R_loc[0]::2,self.R_loc[1]::2]/65535.0
+        G = self.frames_GS_low_gain[:,self.G_loc[0]::2,self.G_loc[1]::2]/65535.0
+        B = self.frames_GS_low_gain[:,self.B_loc[0]::2,self.B_loc[1]::2]/65535.0
+        bayer = np.zeros((self.n_frames, 1024, 1024), dtype=np.float32)
+        RGB = np.zeros((self.n_frames, 1024, 1024, 3), dtype=np.uint16)
+        bayer[:,0::2,0::2] = R
+        bayer[:,1::2,0::2] = G
+        bayer[:,0::2,1::2] = G
+        bayer[:,1::2,1::2] = B  
+        for i in range(self.n_frames):
+            RGB[i] = np.round(colour.cctf_encoding(demosaicing_CFA_Bayer_Menon2007(bayer[i], 'RGGB')) * 65535).astype(np.uint16)
+        return RGB
+    
+    def __demoasic_SP(self, HDRraw) -> np.ndarray:
+        assert(self.is_2x2)
+        R = HDRraw[:,self.R_loc[0]::2,self.R_loc[1]::2]/65535.0
+        G = HDRraw[:,self.G_loc[0]::2,self.G_loc[1]::2]/65535.0
+        B = HDRraw[:,self.B_loc[0]::2,self.B_loc[1]::2]/65535.0
+        bayer = np.zeros((self.n_frames, 1024, 1024), dtype=np.uint16)
+        RGB = np.zeros((self.n_frames, 1024, 1024, 3), dtype=np.float32)
+        bayer[:,0::2,0::2] = R
+        bayer[:,1::2,0::2] = G
+        bayer[:,0::2,1::2] = G
+        bayer[:,1::2,1::2] = B  
+        for i in range(self.n_frames):
+            RGB[i] = np.round(colour.cctf_encoding(demosaicing_CFA_Bayer_Menon2007(bayer[i], 'RGGB')) * 65535).astype(np.uint16)
+        return RGB
     
     @property
     def frames_GS_high_gain_SP(self) -> np.ndarray:
@@ -159,7 +194,8 @@ class mantis_file_GS:
         return self.__HDR_reconstruction(frame_HG=self.frames_GS_high_gain, frame_LG=self.frames_GS_low_gain, tone_maping=tone_mapping, mid_tone=mid_tone, contrast=contrast, power=power)
     
     def frames_GS_HDR_RGB(self, tone_mapping:str="None", mid_tone:float=0.5, contrast:float=10, power=0.5) -> np.ndarray:
-        return self.__HDR_reconstruction(frame_HG=self.frames_GS_high_gain_RGB, frame_LG=self.frames_GS_low_gain_RGB, tone_maping=tone_mapping, mid_tone=mid_tone, contrast=contrast, power=power)
+        HDRraw = self.__HDR_reconstruction(frame_HG=self.frames_GS_high_gain, frame_LG=self.frames_GS_low_gain, tone_maping=tone_mapping, mid_tone=mid_tone, contrast=contrast, power=power)
+        return self.__demoasic_SP(HDRraw)
     
     def frames_GS_HDR_SP(self, tone_mapping:str="None", mid_tone:float=0.5, contrast:float=10, power=0.5) -> np.ndarray:
         return self.__HDR_reconstruction(frame_HG=self.frames_GS_high_gain_SP, frame_LG=self.frames_GS_low_gain_SP, tone_maping=tone_mapping, mid_tone=mid_tone, contrast=contrast, power=power)
