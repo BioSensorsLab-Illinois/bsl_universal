@@ -86,24 +86,24 @@ class CS260B:
         - set filter wheel from position #1 to #6
 
         - This filterwheel has six installed filters all with following wavelength:
-            Filter 1: 335nm Long-pass       Worst-case non-normal incidence cutoff: 315nm
-            Filter 2: 590nm Long-pass       Worst-case non-normal incidence cutoff: 570nm
-            Filter 3: 1000nm Long-pass      Worst-case non-normal incidence cutoff: 980nm
-            Filter 4: 1500nm Long-pass      Worst-case non-normal incidence cutoff: unknown
+            Filter 1: 335nm Long-pass       Worst-case non-normal incidence cuton: 315nm
+            Filter 2: 590nm Long-pass       Worst-case non-normal incidence cuton: 570nm
+            Filter 3: 1000nm Long-pass      Worst-case non-normal incidence cuton: 980nm
+            Filter 4: 1500nm Long-pass      Worst-case non-normal incidence cuton: unknown
             Filter 5: No filter; the light is not filtered
             Filter 6: No filter; the light is not filtered
         """
         # set grating based on wavelength and filter transmission curves:
-        if wavelength < 315:
-            self.set_filter(1)
-        elif wavelength < 570:
-            self.set_filter(2)
-        elif wavelength < 980:
-            self.set_filter(3)
-        elif wavelength < 1480:
-            self.set_filter(4)
-        elif wavelength < 2501:
+        if wavelength < 355:
             self.set_filter(5)
+        elif wavelength < 610:
+            self.set_filter(1)
+        elif wavelength < 1020:
+            self.set_filter(2)
+        elif wavelength < 1520:
+            self.set_filter(3)
+        elif wavelength < 2000:
+            self.set_filter(4)
         return 0
     
 
