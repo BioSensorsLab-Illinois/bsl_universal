@@ -35,6 +35,9 @@ class MantisCamCtrl:
         self.__e_exp_time = 50
         self.__e_exp_matched = False
         self.__is_GSENSE = is_GSENSE
+        
+        self.gs_mean_hg = -99
+        self.gs_mean_lg = -99
 
         self.__logger_init()
         self.__zmq_init()
@@ -83,6 +86,18 @@ class MantisCamCtrl:
             #   we are not waiting for complete. This limits the checking phase to the Smart mode, and only the period
             #   after set exposure and before start recording
             if topic == 'raw':
+                if 'frame_name' in msg:
+                    frame_name = msg['frame_name']
+                    logger.trace(f"Received frame {frame_name}.")
+                    if 'statistics' in msg:
+                        if 'frame-mean' in msg['statistics']:
+                            logger.trace(f"    Received frame mean {msg['statistics']['frame-mean']}.")
+                            if frame_name == 'High Gain':
+                                self.gs_mean_hg = msg['statistics']['frame-mean']
+                            if frame_name == 'Low Gain':
+                                self.gs_mean_lg = msg['statistics']['frame-mean']
+
+
                 if 'frame_meta' in msg:
                     if 'int-set' in msg['frame_meta']:
                         received_exposure_ms = round(float(msg['frame_meta']['int-set']), 0)
@@ -118,6 +133,61 @@ class MantisCamCtrl:
     def __set_frames_per_file(self, frames: int):
         # Send frames per file value to the file saving process
         self.__zmq_send('file', 'frames_per_file', dict(frames_per_file=frames))
+
+    
+    def get_frame_mean_gs_hg(self, timeout_ms:int = 5000) -> float:
+        """
+        - Get the mean value of the High Gain frame.
+
+        Parameters
+        ----------
+        timeout_ms : `int`
+            (default to 5000)
+            Timeout in milliseconds for the function to wait for the frame to be received.
+
+        Returns
+        -------
+        mean : `float`
+            Mean value of the High Gain frame.
+        """
+        time_start = time.time()
+        while True:
+            self.__zmq_recv()
+            if self.gs_mean_hg != -99:
+                mean = self.gs_mean_hg
+                self.gs_mean_hg = -99
+                return self.mean
+            if time.time() - time_start > timeout_ms/1000:
+                logger.error(f"ERROR - Unable to receive High Gain frame, timed out!")
+                raise bsl_type.DeviceTimeOutError
+            
+
+    def get_frame_mean_gs_lg(self, timeout_ms:int = 5000) -> float:
+        """
+        - Get the mean value of the High Gain frame.
+
+        Parameters
+        ----------
+        timeout_ms : `int`
+            (default to 5000)
+            Timeout in milliseconds for the function to wait for the frame to be received.
+
+        Returns
+        -------
+        mean : `float`
+            Mean value of the High Gain frame.
+        """
+        time_start = time.time()
+        while True:
+            self.__zmq_recv()
+            if self.gs_mean_lg != -99:
+                mean = self.gs_mean_lg
+                self.gs_mean_lg = -99
+                return self.mean
+            if time.time() - time_start > timeout_ms/1000:
+                logger.error(f"ERROR - Unable to receive High Gain frame, timed out!")
+                raise bsl_type.DeviceTimeOutError
+
     
 
     def set_exposure_ms(self, exp_time_ms: float) -> None:
