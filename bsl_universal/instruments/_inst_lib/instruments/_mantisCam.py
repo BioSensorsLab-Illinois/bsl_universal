@@ -39,6 +39,7 @@ class MantisCamCtrl:
         
         self.gs_mean_hg = -99
         self.gs_mean_lg = -99
+        self.cur_exp_time_ms = 0
 
         self.__logger_init()
         self.__zmq_init()
@@ -227,6 +228,7 @@ class MantisCamCtrl:
         while True:
             self.__zmq_recv()
             if self.__e_exp_matched:
+                self.cur_exp_time_ms = cur_exp_time
                 if self.__is_GSENSE:
                     total_sleep_time = cur_exp_time/1000 + exp_time_ms/1000
                     time.sleep(total_sleep_time*4 + 2)

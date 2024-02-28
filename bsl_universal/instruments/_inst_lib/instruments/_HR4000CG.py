@@ -120,6 +120,7 @@ class HR4000CG:
         spectrum : `numpy.ndarray`
             combined array of wavelengths and measured intensities
         """
+        temp = self.spec.spectrum(correct_dark_counts, correct_nonlinearity)
         return self.spec.spectrum(correct_dark_counts, correct_nonlinearity)
 
     def set_integration_time_micros(self, exp_us:int) -> None:

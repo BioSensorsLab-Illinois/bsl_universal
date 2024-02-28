@@ -160,8 +160,8 @@ class M69920:
         return 0
 
 
-    def lamp_ON(self, retry:int=20) -> int:
-        count = 1
+    def lamp_ON(self, retry:int=3) -> int:
+        count = 0
         self.logger.debug("Truing ON the Arc Lamp.")
         
         while (not self.is_lamp_ON() and count < retry):
