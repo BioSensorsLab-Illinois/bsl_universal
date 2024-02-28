@@ -327,6 +327,10 @@ class MantisCamCtrl:
 
             self.set_exposure_ms(next_exp)
 
+            if next_exp == min_exp_ms or next_exp == max_exp_ms:
+                logger.warning(f"Auto-Exposure - Exposure time reached the limit, auto exposure terminated.")
+                return False
+
         return False
             
         
