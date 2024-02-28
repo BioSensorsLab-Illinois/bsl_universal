@@ -51,7 +51,7 @@ class MantisCamCtrl:
         # Initialize ZMQ for receiving video metadata and command, and send commands
         self.ctx = zmq.Context()
         self.cmd = Messenger(self.ctx, self.url_cmd_pub, self.url_cmd_sub, 'cmd', '')
-        self.vid = Messenger(self.ctx, None, self.url_vid_sub, 'vid', 'raw')
+        self.vid = Messenger(self.ctx, None, self.url_vid_sub, 'vid', '')
         # We register ther termination function so we don't have to explicitly call it upon normal and abnormal termination
         atexit.register(self.__zmq_term)
         self.poller = zmq.Poller()
@@ -69,6 +69,12 @@ class MantisCamCtrl:
         self.ctx.term()
         logger.trace(f"ZMQ terminated.")
 
+    def __zmq_vid_reset(self):
+        self.vid.close()
+        self.vid = Messenger(self.ctx, None, self.url_vid_sub, 'vid', '')
+        self.poller.register(self.vid.skt_sub, zmq.POLLIN)
+        logger.trace(f"Video socket reset.")
+
 
     def __zmq_recv(self):
         skts = dict(self.poller.poll(timeout=0))
@@ -85,7 +91,9 @@ class MantisCamCtrl:
             #   to read frame metadata at first place: see if the incoming frame exposure match our set exposure), and
             #   we are not waiting for complete. This limits the checking phase to the Smart mode, and only the period
             #   after set exposure and before start recording
-            if topic == 'raw':
+            logger.trace(f"Topic '{topic}' received.")
+
+            if topic == 'isp':
                 if 'frame_name' in msg:
                     frame_name = msg['frame_name']
                     logger.trace(f"Received frame {frame_name}.")
@@ -98,6 +106,7 @@ class MantisCamCtrl:
                                 self.gs_mean_lg = msg['statistics']['frame-mean']
 
 
+            if topic == 'raw':
                 if 'frame_meta' in msg:
                     if 'int-set' in msg['frame_meta']:
                         received_exposure_ms = round(float(msg['frame_meta']['int-set']), 0)
@@ -150,13 +159,14 @@ class MantisCamCtrl:
         mean : `float`
             Mean value of the High Gain frame.
         """
+        self.__zmq_vid_reset()
         time_start = time.time()
         while True:
             self.__zmq_recv()
             if self.gs_mean_hg != -99:
                 mean = self.gs_mean_hg
                 self.gs_mean_hg = -99
-                return self.mean
+                return mean
             if time.time() - time_start > timeout_ms/1000:
                 logger.error(f"ERROR - Unable to receive High Gain frame, timed out!")
                 raise bsl_type.DeviceTimeOutError
@@ -177,13 +187,14 @@ class MantisCamCtrl:
         mean : `float`
             Mean value of the High Gain frame.
         """
+        self.__zmq_vid_reset()
         time_start = time.time()
         while True:
             self.__zmq_recv()
             if self.gs_mean_lg != -99:
                 mean = self.gs_mean_lg
                 self.gs_mean_lg = -99
-                return self.mean
+                return mean
             if time.time() - time_start > timeout_ms/1000:
                 logger.error(f"ERROR - Unable to receive High Gain frame, timed out!")
                 raise bsl_type.DeviceTimeOutError
