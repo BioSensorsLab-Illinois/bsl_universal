@@ -1,5 +1,6 @@
 from typing import Any
 from loguru import logger
+import numpy as np
 from datetime import datetime, timezone
 
 from ..interfaces._bsl_serial import _bsl_serial as bsl_serial
@@ -160,6 +161,8 @@ class MantisCamCtrl:
             Mean value of the High Gain frame.
         """
         self.__zmq_vid_reset()
+        self.__zmq_recv()
+        self.gs_mean_hg = -99
         time_start = time.time()
         while True:
             self.__zmq_recv()
@@ -188,6 +191,8 @@ class MantisCamCtrl:
             Mean value of the High Gain frame.
         """
         self.__zmq_vid_reset()
+        self.__zmq_recv()
+        self.gs_mean_hg = -99
         time_start = time.time()
         while True:
             self.__zmq_recv()
@@ -214,14 +219,17 @@ class MantisCamCtrl:
         # Helper function to set camera and GUI exposure values
         self.__zmq_send('cam', 'exp-00', dict([('exp-00', exp_time_ms)]))
         self.__zmq_send('widget', 'exp-00', dict([('exp-00', exp_time_ms)]))
+        cur_exp_time = self.__e_exp_time
         self.__e_exp_time = exp_time_ms
         self.__e_exp_matched = False
         time_start = time.time()
+        self.__zmq_vid_reset()
         while True:
             self.__zmq_recv()
             if self.__e_exp_matched:
                 if self.__is_GSENSE:
-                    time.sleep(1)
+                    total_sleep_time = cur_exp_time/1000 + exp_time_ms/1000
+                    time.sleep(total_sleep_time*4 + 2)
                 logger.info(f"Camera - Exposure time set to {self.__e_exp_time}ms and verified.")
                 break
             if time.time() - time_start > self.TIMEOUT_SEC:
@@ -252,7 +260,81 @@ class MantisCamCtrl:
             self.__zmq_send('file', 'file_name', dict([('mode', 'Custom'), ('name', file_name)]))
             logger.info(f'Camera recording filename changed to {file_name}')
 
-    
+
+    def run_auto_exposure(self, channel:str='hg', min_exp_ms = 1, max_exp_ms = 2500, target_mean = 30000, max_iter = 10, hysterisis=2000) -> bool:
+        """
+        - Run auto exposure to adjust the exposure time to reach the target mean value.
+
+        Parameters
+        ----------
+        channel : `str`
+            (default to 'hg')
+            Channel to run auto exposure on. 
+            Options: 'hg', 'lg'
+
+        min_exp_ms : `int`
+            (default to 1)
+            Minimum exposure time in milliseconds.
+
+        max_exp_ms : `int`
+            (default to 2500)
+            Maximum exposure time in milliseconds.
+
+        target_mean : `int`
+            (default to 30000)
+            Target mean value for the exposure.
+
+        max_iter : `int`
+            (default to 10)
+            Maximum iteration for the auto exposure to reach the target mean value.
+
+        hysterisis : `int`
+            (default to 2000)
+            Hysterisis for the auto exposure to reach the target mean value.
+
+        Returns
+        -------
+        result : `bool`
+            True if the target mean value is reached, False if not.
+        """
+        for i in range(max_iter):
+            cur_exp = self.__e_exp_time
+            cur_mean_offset = 0
+            target_mean_offset = 0
+            if channel == 'hg':
+                cur_mean = self.get_frame_mean_gs_hg()
+                cur_mean_offset = cur_mean - 1900
+                target_mean_offset = target_mean - 1900
+            elif channel == 'lg':
+                cur_mean = self.get_frame_mean_gs_lg()
+                cur_mean_offset = cur_mean - 1600
+                target_mean_offset = target_mean - 1600
+
+            if abs(cur_mean - target_mean) < hysterisis:
+                logger.info(f"Auto-Exposure - Target mean {target_mean} value reached @ {cur_mean}!")
+                return True
+            
+            exp_ratio = target_mean_offset/cur_mean_offset
+            if cur_mean > 63000:
+                exp_ratio = 0.2
+            next_exp = np.round(cur_exp * exp_ratio, 2)
+            logger.info(f"Auto-Exposure - Iteration {i+1}/{max_iter}, current exposure: {cur_exp}ms, current mean: {cur_mean}, next exposure: {next_exp}ms")
+            
+            if next_exp < min_exp_ms:
+                next_exp = min_exp_ms
+            if next_exp > max_exp_ms:
+                next_exp = max_exp_ms
+
+            self.set_exposure_ms(next_exp)
+
+        return False
+            
+        
+            
+
+
+
+
     def set_folder_name(self, create_new_folder:bool=True, time_stamp_only:bool=False, folder_name: set="video"):
         """
         - Set the file name to be saved. 
