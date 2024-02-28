@@ -70,13 +70,13 @@ class CS260B:
         - Sequential operation order of the gratings is #1 -> #3 -> #2 -> #4
         """
         # set grating based on wavelength and grating efficiency curves:
-        if wavelength < 540:
+        if wavelength < 516:
             self.set_grating(1)
-        elif wavelength < 760:
-            self.set_grating(3)
-        elif wavelength < 1295:
+        elif wavelength < 754:
             self.set_grating(2)
-        elif wavelength < 2501:
+        elif wavelength < 1480:
+            self.set_grating(3)
+        else:
             self.set_grating(4)
         return 0
     
@@ -139,7 +139,7 @@ class CS260B:
         return 0
 
 
-    def set_wavelength(self, wavelength:float=0.0, auto_grating:bool = True, auto_filter:bool = False) -> float:
+    def set_wavelength(self, wavelength:float=0.0, auto_grating:bool = True, auto_filter:bool = True) -> float:
         """
         - set output wavelength of the monochromator in nm.
 

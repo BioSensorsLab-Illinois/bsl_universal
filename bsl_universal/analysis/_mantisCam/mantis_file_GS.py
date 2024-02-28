@@ -195,48 +195,51 @@ class mantis_file_GS:
     @property
     def frames_GS_high_gain_RGB(self) -> np.ndarray:
         assert(self.is_2x2)
-        R = self.frames_GS_high_gain[:,self.R_loc[0]::2,self.R_loc[1]::2]/65535.0
-        G = self.frames_GS_high_gain[:,self.G_loc[0]::2,self.G_loc[1]::2]/65535.0
-        B = self.frames_GS_high_gain[:,self.B_loc[0]::2,self.B_loc[1]::2]/65535.0
-        bayer = np.zeros((self.n_frames, 1024, 1024), dtype=np.float32)
-        RGB = np.zeros((self.n_frames, 1024, 1024, 3), dtype=np.uint16)
-        bayer[:,0::2,0::2] = R
-        bayer[:,1::2,0::2] = G
-        bayer[:,0::2,1::2] = G
-        bayer[:,1::2,1::2] = B
-        for i in range(self.n_frames):
-            RGB[i] = np.round(colour.cctf_encoding(demosaicing_CFA_Bayer_Menon2007(bayer[i], 'RGGB')) * 65535).astype(np.uint16)
-        return RGB
+        R = (self.frames_GS_high_gain[:,self.R_loc[0]::2,self.R_loc[1]::2]/65535.0).astype(np.float32)
+        G = (self.frames_GS_high_gain[:,self.G_loc[0]::2,self.G_loc[1]::2]/65535.0).astype(np.float32)
+        B = (self.frames_GS_high_gain[:,self.B_loc[0]::2,self.B_loc[1]::2]/65535.0).astype(np.float32)
+        return np.stack((R,G,B), axis=-1)
+        # bayer = np.zeros((self.n_frames, 1024, 1024), dtype=np.float32)
+        # RGB = np.zeros((self.n_frames, 1024, 1024, 3), dtype=np.float32)
+        # bayer[:,0::2,0::2] = R
+        # bayer[:,1::2,0::2] = G
+        # bayer[:,0::2,1::2] = G
+        # bayer[:,1::2,1::2] = B
+        # for i in range(self.n_frames):
+        #     RGB[i] = colour.cctf_encoding(demosaicing_CFA_Bayer_Menon2007(bayer[i], 'RGGB'))
+        # return RGB
             
     @property
     def frames_GS_low_gain_RGB(self) -> np.ndarray:
         assert(self.is_2x2)
-        R = self.frames_GS_low_gain[:,self.R_loc[0]::2,self.R_loc[1]::2]/65535.0
-        G = self.frames_GS_low_gain[:,self.G_loc[0]::2,self.G_loc[1]::2]/65535.0
-        B = self.frames_GS_low_gain[:,self.B_loc[0]::2,self.B_loc[1]::2]/65535.0
+        R = (self.frames_GS_low_gain[:,self.R_loc[0]::2,self.R_loc[1]::2]/65535.0).astype(np.float32)
+        G = (self.frames_GS_low_gain[:,self.G_loc[0]::2,self.G_loc[1]::2]/65535.0).astype(np.float32)
+        B = (self.frames_GS_low_gain[:,self.B_loc[0]::2,self.B_loc[1]::2]/65535.0).astype(np.float32)
+        return np.stack((R,G,B), axis=-1)
         bayer = np.zeros((self.n_frames, 1024, 1024), dtype=np.float32)
-        RGB = np.zeros((self.n_frames, 1024, 1024, 3), dtype=np.uint16)
-        bayer[:,0::2,0::2] = R
-        bayer[:,1::2,0::2] = G
-        bayer[:,0::2,1::2] = G
-        bayer[:,1::2,1::2] = B  
-        for i in range(self.n_frames):
-            RGB[i] = np.round(colour.cctf_encoding(demosaicing_CFA_Bayer_Menon2007(bayer[i], 'RGGB')) * 65535).astype(np.uint16)
-        return RGB
-    
-    def __demoasic_SP(self, HDRraw) -> np.ndarray:
-        assert(self.is_2x2)
-        R = HDRraw[:,self.R_loc[0]::2,self.R_loc[1]::2]/65535.0
-        G = HDRraw[:,self.G_loc[0]::2,self.G_loc[1]::2]/65535.0
-        B = HDRraw[:,self.B_loc[0]::2,self.B_loc[1]::2]/65535.0
-        bayer = np.zeros((self.n_frames, 1024, 1024), dtype=np.uint16)
         RGB = np.zeros((self.n_frames, 1024, 1024, 3), dtype=np.float32)
         bayer[:,0::2,0::2] = R
         bayer[:,1::2,0::2] = G
         bayer[:,0::2,1::2] = G
         bayer[:,1::2,1::2] = B  
         for i in range(self.n_frames):
-            RGB[i] = np.round(colour.cctf_encoding(demosaicing_CFA_Bayer_Menon2007(bayer[i], 'RGGB')) * 65535).astype(np.uint16)
+            RGB[i] = colour.cctf_encoding(demosaicing_CFA_Bayer_Menon2007(bayer[i], 'RGGB')).astype(np.float32) 
+        return RGB
+    
+    def __demoasic_SP(self, HDRraw) -> np.ndarray:
+        assert(self.is_2x2)
+        R = np.round(HDRraw[:,self.R_loc[0]::2,self.R_loc[1]::2]/65535.0).astype(np.float32)
+        G = np.round(HDRraw[:,self.G_loc[0]::2,self.G_loc[1]::2]/65535.0).astype(np.float32)
+        B = np.round(HDRraw[:,self.B_loc[0]::2,self.B_loc[1]::2]/65535.0).astype(np.float32)
+        return np.stack((R,G,B), axis=-1)
+        bayer = np.zeros((self.n_frames, 1024, 1024), dtype=np.float32)
+        RGB = np.zeros((self.n_frames, 1024, 1024, 3), dtype=np.float32)
+        bayer[:,0::2,0::2] = R
+        bayer[:,1::2,0::2] = G
+        bayer[:,0::2,1::2] = G
+        bayer[:,1::2,1::2] = B  
+        for i in range(self.n_frames):
+            RGB[i] = colour.cctf_encoding(demosaicing_CFA_Bayer_Menon2007(bayer[i], 'RGGB')).astype(np.float32) 
         return RGB
     
     @property
