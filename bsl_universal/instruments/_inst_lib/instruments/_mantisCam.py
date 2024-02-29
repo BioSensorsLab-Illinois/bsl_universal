@@ -37,8 +37,6 @@ class MantisCamCtrl:
         self.__e_exp_matched = False
         self.__is_GSENSE = is_GSENSE
         
-        self.gs_mean_hg = -99
-        self.gs_mean_lg = -99
         self.cur_exp_time_ms = 0
 
         self.__logger_init()
@@ -78,6 +76,38 @@ class MantisCamCtrl:
         logger.trace(f"Video socket reset.")
 
 
+    def __zmq_update_mean(self, desired_frame_name: str):
+        skts = dict(self.poller.poll(timeout=0))
+                        
+        if self.vid.skt_sub in skts:
+            topic, name, msg, frame_dump = self.vid.peak_frame()
+            logger.trace(f"Topic '{topic}' received.")
+
+            if topic != 'isp':
+                return -1
+            if 'frame_name' not in msg:
+                return -1
+            if msg['frame_name'] != desired_frame_name:
+                return -1
+            
+            frame_name = msg['frame_name']
+            logger.trace(f"Received frame {frame_name}.")
+
+            if 'statistics' not in msg:
+                return -1
+            if frame_name != desired_frame_name:
+                return -1
+            if 'frame-mean' not in msg['statistics']:
+                return -1
+            
+            logger.trace(f"    Received frame mean {msg['statistics']['frame-mean']}.")
+            return msg['statistics']['frame-mean']
+        
+        return -1
+
+        time.sleep(self.__ZMQ_CMD_DELAY)
+
+
     def __zmq_recv(self):
         skts = dict(self.poller.poll(timeout=0))
         if self.cmd.skt_sub in skts:
@@ -93,20 +123,6 @@ class MantisCamCtrl:
             #   to read frame metadata at first place: see if the incoming frame exposure match our set exposure), and
             #   we are not waiting for complete. This limits the checking phase to the Smart mode, and only the period
             #   after set exposure and before start recording
-            logger.trace(f"Topic '{topic}' received.")
-
-            if topic == 'isp':
-                if 'frame_name' in msg:
-                    frame_name = msg['frame_name']
-                    logger.trace(f"Received frame {frame_name}.")
-                    if 'statistics' in msg:
-                        if 'frame-mean' in msg['statistics']:
-                            logger.trace(f"    Received frame mean {msg['statistics']['frame-mean']}.")
-                            if frame_name == 'High Gain':
-                                self.gs_mean_hg = msg['statistics']['frame-mean']
-                            if frame_name == 'Low Gain':
-                                self.gs_mean_lg = msg['statistics']['frame-mean']
-
 
             if topic == 'raw':
                 if 'frame_meta' in msg:
@@ -161,19 +177,7 @@ class MantisCamCtrl:
         mean : `float`
             Mean value of the High Gain frame.
         """
-        self.__zmq_vid_reset()
-        self.__zmq_recv()
-        self.gs_mean_hg = -99
-        time_start = time.time()
-        while True:
-            self.__zmq_recv()
-            if self.gs_mean_hg != -99:
-                mean = self.gs_mean_hg
-                self.gs_mean_hg = -99
-                return mean
-            if time.time() - time_start > timeout_ms/1000:
-                logger.error(f"ERROR - Unable to receive High Gain frame, timed out!")
-                raise bsl_type.DeviceTimeOutError
+        return self.get_frame_mean_name('High Gain', timeout_ms)
             
 
     def get_frame_mean_gs_lg(self, timeout_ms:int = 5000) -> float:
@@ -191,15 +195,35 @@ class MantisCamCtrl:
         mean : `float`
             Mean value of the High Gain frame.
         """
+        return self.get_frame_mean_name('Low Gain', timeout_ms)
+            
+    
+    def get_frame_mean_name(self, frame_name:str="High Gain", timeout_ms:int = 5000) -> float:
+        """
+        - Get the mean value of the High Gain frame.
+
+        Parameters
+        ----------
+        frame_name : `str`
+            (default to 'High Gain')
+            Name of the frame to get the mean value from.
+            Options: 'High Gain', 'Low Gain', others
+
+        timeout_ms : `int`
+            (default to 5000)
+            Timeout in milliseconds for the function to wait for the frame to be received.
+
+        Returns
+        -------
+        mean : `float`
+            Mean value of the High Gain frame.
+        """
         self.__zmq_vid_reset()
         self.__zmq_recv()
-        self.gs_mean_hg = -99
         time_start = time.time()
         while True:
-            self.__zmq_recv()
-            if self.gs_mean_lg != -99:
-                mean = self.gs_mean_lg
-                self.gs_mean_lg = -99
+            mean = self.__zmq_update_mean(frame_name)
+            if mean != -1:
                 return mean
             if time.time() - time_start > timeout_ms/1000:
                 logger.error(f"ERROR - Unable to receive High Gain frame, timed out!")
