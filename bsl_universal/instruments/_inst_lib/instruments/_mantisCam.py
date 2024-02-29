@@ -103,9 +103,9 @@ class MantisCamCtrl:
             logger.trace(f"    Received frame mean {msg['statistics']['frame-mean']}.")
             return msg['statistics']['frame-mean']
         
+        time.sleep(self.__ZMQ_CMD_DELAY)
         return -1
 
-        time.sleep(self.__ZMQ_CMD_DELAY)
 
 
     def __zmq_recv(self):
@@ -226,7 +226,7 @@ class MantisCamCtrl:
             if mean != -1:
                 return mean
             if time.time() - time_start > timeout_ms/1000:
-                logger.error(f"ERROR - Unable to receive High Gain frame, timed out!")
+                logger.error(f"ERROR - Unable to receive {frame_name} frame, timed out!")
                 raise bsl_type.DeviceTimeOutError
 
     
@@ -287,7 +287,7 @@ class MantisCamCtrl:
             logger.info(f'Camera recording filename changed to {file_name}')
 
 
-    def run_auto_exposure(self, channel:str='hg', min_exp_ms = 1, max_exp_ms = 2500, target_mean = 30000, max_iter = 10, hysterisis=2000) -> bool:
+    def run_auto_exposure(self, frame_name:str='High Gain', min_exp_ms = 1, max_exp_ms = 2500, target_mean = 30000, max_iter = 10, hysterisis=2000) -> bool:
         """
         - Run auto exposure to adjust the exposure time to reach the target mean value.
 
@@ -325,16 +325,10 @@ class MantisCamCtrl:
         """
         for i in range(max_iter):
             cur_exp = self.__e_exp_time
-            cur_mean_offset = 0
-            target_mean_offset = 0
-            if channel == 'hg':
-                cur_mean = self.get_frame_mean_gs_hg()
-                cur_mean_offset = cur_mean - 1900
-                target_mean_offset = target_mean - 1900
-            elif channel == 'lg':
-                cur_mean = self.get_frame_mean_gs_lg()
-                cur_mean_offset = cur_mean - 1600
-                target_mean_offset = target_mean - 1600
+
+            cur_mean = self.get_frame_mean_name(frame_name)
+            cur_mean_offset = cur_mean - 1900
+            target_mean_offset = target_mean - 1900
 
             if abs(cur_mean - target_mean) < hysterisis:
                 logger.info(f"Auto-Exposure - Target mean {target_mean} value reached @ {cur_mean}!")
