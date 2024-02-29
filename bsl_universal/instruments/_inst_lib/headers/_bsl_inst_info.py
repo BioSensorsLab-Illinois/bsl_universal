@@ -19,7 +19,7 @@ class _bsl_inst_info_list:
         MODEL="PM400",
         TYPE="Power Meter",
         INTERFACE="VISA",
-        USB_PID="0x8078",
+        USB_PID="0x8075",
         USB_VID="0x1313",
         QUERY_CMD="*IDN?",
         QUERY_SN_CMD="*IDN?",
