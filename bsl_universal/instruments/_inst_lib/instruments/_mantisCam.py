@@ -103,7 +103,8 @@ class MantisCamCtrl:
             if sub_frame_type != '':
                 if sub_frame_type not in msg['statistics']:
                     return -1
-                logger.trace(f"    Received frame mean {msg['statistics'][f"frame-mean-{sub_frame_type}"]} with sub-frame-type {sub_frame_type}.")
+                sub_frame_type = "frame-mean-" + sub_frame_type
+                logger.trace(f"    Received frame mean {msg['statistics'][sub_frame_type]} with sub-frame-type {sub_frame_type}.")
                 return msg['statistics'][sub_frame_type]
 
             logger.trace(f"    Received frame mean {msg['statistics']['frame-mean']}.")
@@ -298,7 +299,7 @@ class MantisCamCtrl:
             logger.info(f'Camera recording filename changed to {file_name}')
 
 
-    def run_auto_exposure(self, frame_name:str='High Gain', sub_frame_type:str='', min_exp_ms = 1, max_exp_ms = 2500, target_mean = 30000, max_iter = 10, hysterisis=2000) -> bool:
+    def run_auto_exposure(self, frame_name:str='High Gain', sub_frame_type:str='', run_rgb_max_chan:bool=False, min_exp_ms = 1, max_exp_ms = 2500, target_mean = 30000, max_iter = 10, hysterisis=2000) -> bool:
         """
         - Run auto exposure to adjust the exposure time to reach the target mean value.
 
@@ -313,6 +314,10 @@ class MantisCamCtrl:
             (default to '')
             Sub-frame type to run auto exposure on.
             Options: 'red', 'green', 'blue'
+
+        run_rgb_max_chan : `bool`
+            (default to False) 
+            If set to True, the auto exposure will run on the channel with the maximum mean value.
 
         min_exp_ms : `int`
             (default to 1)
@@ -341,8 +346,15 @@ class MantisCamCtrl:
         """
         for i in range(max_iter):
             cur_exp = self.__e_exp_time
-
-            cur_mean = self.get_frame_mean_name(frame_name, sub_frame_type=sub_frame_type)
+            
+            if run_rgb_max_chan:
+                r_exp = self.get_frame_mean_name(frame_name, sub_frame_type='red')
+                g_exp = self.get_frame_mean_name(frame_name, sub_frame_type='green')
+                b_exp = self.get_frame_mean_name(frame_name, sub_frame_type='blue')
+                cur_mean = max(r_exp, g_exp, b_exp)
+            else:
+                cur_mean = self.get_frame_mean_name(frame_name, sub_frame_type=sub_frame_type)
+            
             cur_mean_offset = cur_mean - 1900
             target_mean_offset = target_mean - 1900
 
