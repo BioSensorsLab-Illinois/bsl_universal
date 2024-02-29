@@ -101,9 +101,9 @@ class MantisCamCtrl:
                 return -1
             
             if sub_frame_type != '':
+                sub_frame_type = "frame-mean-" + sub_frame_type
                 if sub_frame_type not in msg['statistics']:
                     return -1
-                sub_frame_type = "frame-mean-" + sub_frame_type
                 logger.trace(f"    Received frame mean {msg['statistics'][sub_frame_type]} with sub-frame-type {sub_frame_type}.")
                 return msg['statistics'][sub_frame_type]
 
