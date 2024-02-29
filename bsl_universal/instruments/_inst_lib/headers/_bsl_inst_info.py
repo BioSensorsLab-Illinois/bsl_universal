@@ -14,6 +14,19 @@ class _bsl_inst_info_list:
         SN_REG="(?<=,)P[0-9]+(?=,)"
     )
 
+    PM400 = _bsl_inst_info_class(
+        MANUFACTURE="THORLAB",
+        MODEL="PM400",
+        TYPE="Power Meter",
+        INTERFACE="VISA",
+        USB_PID="0x8078",
+        USB_VID="0x1313",
+        QUERY_CMD="*IDN?",
+        QUERY_SN_CMD="*IDN?",
+        QUERY_E_RESP="PM400",
+        SN_REG="(?<=,)P[0-9]+(?=,)"
+    )
+
     DC2200 = _bsl_inst_info_class(
         MANUFACTURE="THORLAB",
         MODEL="DC2200",

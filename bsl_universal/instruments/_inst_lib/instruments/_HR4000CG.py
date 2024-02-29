@@ -19,7 +19,7 @@ class HR4000CG:
             
         if self.spec is not None:
             self.logger.device_id = self.device_id
-            self.logger.success(f"READY - OceanOptics PM100D Spectrometer \"{self.device_id}\"\n\n")
+            self.logger.success(f"READY - OceanOptics HR4000CG Spectrometer \"{self.device_id}\"\n\n")
         return None
 
     def __del__(self, *args, **kwargs) -> None:
@@ -172,6 +172,6 @@ class HR4000CG:
                 del self.spec
         except:
             pass
-        self.logger.success(f"CLOSED - OceanOptics PM100D Spectrometer \"{self.device_id}\"\n\n\n")
+        self.logger.success(f"CLOSED - OceanOptics HR4000CG Spectrometer \"{self.device_id}\"\n\n\n")
         return None
 
