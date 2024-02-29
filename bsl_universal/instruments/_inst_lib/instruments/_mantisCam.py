@@ -76,7 +76,7 @@ class MantisCamCtrl:
         logger.trace(f"Video socket reset.")
 
 
-    def __zmq_update_mean(self, desired_frame_name: str):
+    def __zmq_update_mean(self, desired_frame_name: str, sub_frame_type:str='') -> float:
         skts = dict(self.poller.poll(timeout=0))
                         
         if self.vid.skt_sub in skts:
@@ -100,6 +100,12 @@ class MantisCamCtrl:
             if 'frame-mean' not in msg['statistics']:
                 return -1
             
+            if sub_frame_type != '':
+                if sub_frame_type not in msg['statistics']:
+                    return -1
+                logger.trace(f"    Received frame mean {msg['statistics'][sub_frame_type]} with sub-frame-type {sub_frame_type}.")
+                return msg['statistics'][sub_frame_type]
+
             logger.trace(f"    Received frame mean {msg['statistics']['frame-mean']}.")
             return msg['statistics']['frame-mean']
         
@@ -198,7 +204,7 @@ class MantisCamCtrl:
         return self.get_frame_mean_name('Low Gain', timeout_ms)
             
     
-    def get_frame_mean_name(self, frame_name:str="High Gain", timeout_ms:int = 5000) -> float:
+    def get_frame_mean_name(self, frame_name:str="High Gain", timeout_ms:int = 5000, sub_frame_type:str='') -> float:
         """
         - Get the mean value of the High Gain frame.
 
@@ -213,6 +219,11 @@ class MantisCamCtrl:
             (default to 5000)
             Timeout in milliseconds for the function to wait for the frame to be received.
 
+        sub_frame_type : `str`
+            (default to '')
+            Sub-frame type to get the mean value from.
+            Options: 'red', 'green', 'blue'
+
         Returns
         -------
         mean : `float`
@@ -222,7 +233,7 @@ class MantisCamCtrl:
         self.__zmq_recv()
         time_start = time.time()
         while True:
-            mean = self.__zmq_update_mean(frame_name)
+            mean = self.__zmq_update_mean(desired_frame_name=frame_name, sub_frame_type=sub_frame_type)
             if mean != -1:
                 return mean
             if time.time() - time_start > timeout_ms/1000:
@@ -287,16 +298,21 @@ class MantisCamCtrl:
             logger.info(f'Camera recording filename changed to {file_name}')
 
 
-    def run_auto_exposure(self, frame_name:str='High Gain', min_exp_ms = 1, max_exp_ms = 2500, target_mean = 30000, max_iter = 10, hysterisis=2000) -> bool:
+    def run_auto_exposure(self, frame_name:str='High Gain', sub_frame_type:str='', min_exp_ms = 1, max_exp_ms = 2500, target_mean = 30000, max_iter = 10, hysterisis=2000) -> bool:
         """
         - Run auto exposure to adjust the exposure time to reach the target mean value.
 
         Parameters
         ----------
-        channel : `str`
+        frame_name : `str`
             (default to 'hg')
             Channel to run auto exposure on. 
-            Options: 'hg', 'lg'
+            Options: 'hg', 'lg', 'NIR', 'RGB' etc.,
+
+        sub_frame_type : `str`
+            (default to '')
+            Sub-frame type to run auto exposure on.
+            Options: 'red', 'green', 'blue'
 
         min_exp_ms : `int`
             (default to 1)
@@ -326,7 +342,7 @@ class MantisCamCtrl:
         for i in range(max_iter):
             cur_exp = self.__e_exp_time
 
-            cur_mean = self.get_frame_mean_name(frame_name)
+            cur_mean = self.get_frame_mean_name(frame_name, sub_frame_type=sub_frame_type)
             cur_mean_offset = cur_mean - 1900
             target_mean_offset = target_mean - 1900
 
