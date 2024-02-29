@@ -103,7 +103,7 @@ class MantisCamCtrl:
             if sub_frame_type != '':
                 if sub_frame_type not in msg['statistics']:
                     return -1
-                logger.trace(f"    Received frame mean {msg['statistics'][sub_frame_type]} with sub-frame-type {sub_frame_type}.")
+                logger.trace(f"    Received frame mean {msg['statistics'][f"frame-mean-{sub_frame_type}"]} with sub-frame-type {sub_frame_type}.")
                 return msg['statistics'][sub_frame_type]
 
             logger.trace(f"    Received frame mean {msg['statistics']['frame-mean']}.")
@@ -204,7 +204,7 @@ class MantisCamCtrl:
         return self.get_frame_mean_name('Low Gain', timeout_ms)
             
     
-    def get_frame_mean_name(self, frame_name:str="High Gain", timeout_ms:int = 5000, sub_frame_type:str='') -> float:
+    def get_frame_mean_name(self, frame_name:str="High Gain", sub_frame_type:str='', timeout_ms:int = 5000) -> float:
         """
         - Get the mean value of the High Gain frame.
 
