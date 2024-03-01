@@ -119,14 +119,19 @@ class M69920:
         return 0
     
 
-    def __error_checking(self, retry:int=3) -> int:
+    def __error_checking(self, retry:int=5) -> int:
         count = 1
         resp=""
         while ("ESR" not in str(resp)) and (count <= retry):
             resp = self.serial_command("ESR?")
             count += 1
+        time.sleep(1)
 
         # Parse the status bit from incomming msg
+        if resp == b'':
+            self.logger.error("Arc Lamp Power Supply ESR query failed!")
+            return -1
+
         err_status = int(resp[3:5],16)
 
         # Check bit-7 for power ON error
