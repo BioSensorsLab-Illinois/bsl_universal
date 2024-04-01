@@ -44,6 +44,7 @@ class MantisCamCtrl:
         time.sleep(1)
         logger.success(f"Camera - ZMQ interface connected, camera initlized!")
         self.set_file_name(time_stamp_only=True)
+        self.set_exposure_ms(50)
         return
 
 
@@ -94,10 +95,13 @@ class MantisCamCtrl:
             logger.trace(f"Received frame {frame_name}.")
 
             if 'statistics' not in msg:
+                logger.trace(f"    No statistics in the frame.")
                 return -1
             if frame_name != desired_frame_name:
+                logger.trace(f"    Frame name not match.")
                 return -1
             if 'frame-mean' not in msg['statistics']:
+                logger.trace(f"    No frame mean in the frame.")
                 return -1
             
             if sub_frame_type != '':
@@ -135,9 +139,9 @@ class MantisCamCtrl:
                 if 'frame_meta' in msg:
                     if 'int-set' in msg['frame_meta']:
                         received_exposure_ms = round(float(msg['frame_meta']['int-set']), 0)
-                        #logger.trace(f"Received frame exposure {received_exposure_ms}, expected frame exposure {self.__e_exp_time}.")
+                        logger.trace(f"Received frame exposure {received_exposure_ms}, expected frame exposure {self.__e_exp_time}.")
                         # If match, we procede to the next phase: recording
-                        if received_exposure_ms == self.__e_exp_time:
+                        if received_exposure_ms == round(self.__e_exp_time):
                             self.__e_exp_matched = True
                         if self.__is_GSENSE:
                             self.__e_exp_matched = True
@@ -232,10 +236,13 @@ class MantisCamCtrl:
         """
         self.__zmq_vid_reset()
         self.__zmq_recv()
-        time_start = time.time()
+        time_start = time.time() 
         while True:
             mean = self.__zmq_update_mean(desired_frame_name=frame_name, sub_frame_type=sub_frame_type)
-            if mean != -1:
+            if isinstance(mean != -1, np.ndarray):
+                if all(x != -1 for x in mean):
+                    return mean
+            elif mean != -1:
                 return mean
             if time.time() - time_start > timeout_ms/1000:
                 logger.error(f"ERROR - Unable to receive {frame_name} frame, timed out!")
@@ -264,12 +271,13 @@ class MantisCamCtrl:
         while True:
             self.__zmq_recv()
             if self.__e_exp_matched:
-                self.cur_exp_time_ms = cur_exp_time
                 if self.__is_GSENSE:
                     total_sleep_time = cur_exp_time/1000 + exp_time_ms/1000
-                    time.sleep(total_sleep_time*4 + 2)
-                logger.info(f"Camera - Exposure time set to {self.__e_exp_time}ms and verified.")
+                    time.sleep(total_sleep_time*2+0.1)
+                logger.info(f"Camera - Exposure time set to {exp_time_ms}ms and verified.")
+                self.cur_exp_time_ms = exp_time_ms
                 break
+            logger.trace(f"Camera - exposure mismatch, expected {exp_time_ms}ms, current {self.__e_exp_time}ms.")
             if time.time() - time_start > self.TIMEOUT_SEC:
                 logger.error(f"ERROR - Camera exposure time not match, timed out!")
                 raise bsl_type.DeviceTimeOutError
@@ -299,7 +307,7 @@ class MantisCamCtrl:
             logger.info(f'Camera recording filename changed to {file_name}')
 
 
-    def run_auto_exposure(self, frame_name:str='High Gain', sub_frame_type:str='', run_rgb_max_chan:bool=False, min_exp_ms = 1, max_exp_ms = 2500, target_mean = 30000, max_iter = 10, hysterisis=2000) -> bool:
+    def run_auto_exposure(self, frame_name:str='High Gain', sub_frame_type:str='', run_rgb_max_chan:bool=False, min_exp_ms = 1, max_exp_ms = 2500, target_mean = 30000, max_iter = 10, hysterisis=2000):
         """
         - Run auto exposure to adjust the exposure time to reach the target mean value.
 
@@ -341,33 +349,44 @@ class MantisCamCtrl:
 
         Returns
         -------
-        result : `bool`
-            True if the target mean value is reached, False if not.
+        result : `int`
         """
         for i in range(max_iter):
             cur_exp = self.__e_exp_time
             
             if run_rgb_max_chan:
-                r_exp = self.get_frame_mean_name(frame_name, sub_frame_type='red')
-                g_exp = self.get_frame_mean_name(frame_name, sub_frame_type='green')
-                b_exp = self.get_frame_mean_name(frame_name, sub_frame_type='blue')
+                if self.__is_GSENSE:
+                    r_exp = self.get_frame_mean_name(frame_name, sub_frame_type='red')
+                    g_exp = self.get_frame_mean_name(frame_name, sub_frame_type='green')
+                    b_exp = self.get_frame_mean_name(frame_name, sub_frame_type='blue')
+                else:
+                    r_exp = self.get_frame_mean_name(frame_name)[0]
+                    g_exp = self.get_frame_mean_name(frame_name)[1]
+                    b_exp = self.get_frame_mean_name(frame_name)[2]
                 cur_mean = max(r_exp, g_exp, b_exp)
             else:
-                cur_mean = self.get_frame_mean_name(frame_name, sub_frame_type=sub_frame_type)
+                if self.__is_GSENSE:
+                    cur_mean = self.get_frame_mean_name(frame_name, sub_frame_type=sub_frame_type)
+                else:
+                    cur_mean = np.mean(self.get_frame_mean_name(frame_name))
             
-            cur_mean_offset = cur_mean - 1900
-            target_mean_offset = target_mean - 1900
+            if self.__is_GSENSE:
+                cur_mean_offset = cur_mean - 1100
+                target_mean_offset = target_mean - 1100
+            else:
+                cur_mean_offset = cur_mean
+                target_mean_offset = target_mean
 
             if abs(cur_mean - target_mean) < hysterisis:
                 logger.info(f"Auto-Exposure - Target mean {target_mean} value reached @ {cur_mean}!")
-                return True
+                return self.cur_exp_time_ms
             
             exp_ratio = target_mean_offset/cur_mean_offset
             if cur_mean > 63000:
                 exp_ratio = 0.2
+
             next_exp = np.round(cur_exp * exp_ratio, 2)
             logger.info(f"Auto-Exposure - Iteration {i+1}/{max_iter}, current exposure: {cur_exp}ms, current mean: {cur_mean}, next exposure: {next_exp}ms")
-            
             if next_exp < min_exp_ms:
                 next_exp = min_exp_ms
             if next_exp > max_exp_ms:
@@ -377,7 +396,7 @@ class MantisCamCtrl:
 
             if next_exp == min_exp_ms or next_exp == max_exp_ms:
                 logger.warning(f"Auto-Exposure - Exposure time reached the limit, auto exposure terminated.")
-                return False
+                return self.cur_exp_time_ms
 
         return False
             
