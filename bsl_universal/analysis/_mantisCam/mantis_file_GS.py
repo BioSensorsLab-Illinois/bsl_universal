@@ -111,6 +111,124 @@ class mantis_file_GS:
         elif tone_maping.lower() == "enhance":
             frame_HDR = self.__tone_map_enhance(frame_HDR, mid_tone=mid_tone, contrast=contrast)
         return np.clip(frame_HDR * 65535, 0, 65535).astype(np.uint16)
+    
+
+    def init_polar_recording(self, I0=(0,0), I45=(0,1), I90=(1,1), I135=(1,0), offset_16bit_HG = 0, offset_16bit_LG = 0):
+        self.__polar_HG_I0 =    np.array(self.frames_GS_high_gain[:, I0[0]::2, I0[1]::2]    , dtype=np.float32) - offset_16bit_HG
+        self.__polar_HG_I45 =   np.array(self.frames_GS_high_gain[:, I45[0]::2, I45[1]::2]  , dtype=np.float32) - offset_16bit_HG
+        self.__polar_HG_I90 =   np.array(self.frames_GS_high_gain[:, I90[0]::2, I90[1]::2]  , dtype=np.float32) - offset_16bit_HG
+        self.__polar_HG_I135 =  np.array(self.frames_GS_high_gain[:, I135[0]::2, I135[1]::2], dtype=np.float32) - offset_16bit_HG    
+        self.__polar_LG_I0 =    np.array(self.frames_GS_low_gain[:, I0[0]::2, I0[1]::2]     , dtype=np.float32) - offset_16bit_LG
+        self.__polar_LG_I45 =   np.array(self.frames_GS_low_gain[:, I45[0]::2, I45[1]::2]   , dtype=np.float32) - offset_16bit_LG
+        self.__polar_LG_I90 =   np.array(self.frames_GS_low_gain[:, I90[0]::2, I90[1]::2]   , dtype=np.float32) - offset_16bit_LG
+        self.__polar_LG_I135 =  np.array(self.frames_GS_low_gain[:, I135[0]::2, I135[1]::2] , dtype=np.float32) - offset_16bit_LG
+
+        self.__polar_HG_I0[self.__polar_HG_I0 < 1] = 1
+        self.__polar_HG_I45[self.__polar_HG_I45 < 1] = 1
+        self.__polar_HG_I90[self.__polar_HG_I90 < 1] = 1
+        self.__polar_HG_I135[self.__polar_HG_I135 < 1] = 1
+        self.__polar_LG_I0[self.__polar_LG_I0 < 1] = 1
+        self.__polar_LG_I45[self.__polar_LG_I45 < 1] = 1
+        self.__polar_LG_I90[self.__polar_LG_I90 < 1] = 1
+        self.__polar_LG_I135[self.__polar_LG_I135 < 1] = 1
+
+        S1_HG = self.__polar_HG_I0 - self.__polar_HG_I90
+        S2_HG = self.__polar_HG_I45 - self.__polar_HG_I135
+        S1_LG = self.__polar_LG_I0 - self.__polar_LG_I90
+        S2_LG = self.__polar_LG_I45 - self.__polar_LG_I135
+
+        self.__polar_intensity_HG = (self.__polar_HG_I0 + self.__polar_HG_I45 + self.__polar_HG_I90 + self.__polar_HG_I135) / 2.0
+        self.__polar_intensity_LG = (self.__polar_LG_I0 + self.__polar_LG_I45 + self.__polar_LG_I90 + self.__polar_LG_I135) / 2.0
+        
+        self.__polar_DoLP_HG = np.sqrt(S1_HG**2 + S2_HG**2) / (self.__polar_intensity_HG)
+        self.__polar_AoP_HG = 0.5 * np.arctan2(S2_HG, S1_HG) * 180 / np.pi + 90
+        self.__polar_DoLP_LG = np.sqrt(S1_LG**2 + S2_LG**2) / (self.__polar_intensity_LG)
+        self.__polar_AoP_LG = 0.5 * np.arctan2(S2_LG, S1_LG) * 180 / np.pi + 90
+        
+    @property
+    def frames_DoLP_high_gain(self):
+        """
+        - Return the frames from the high gain channel of the video file with DoLP information.
+
+        Returns
+        -------
+        result : `np.ndarray`
+            DoLP Frames from the high gain channel of the video file.
+            (This DoLP data is organized in a format of float32 in range [0, 1] )
+        """
+        #check if polar_recording is initilized, else throw error
+        return self.__polar_DoLP_HG.astype(np.float32)
+        
+    @property
+    def frames_DoLP_low_gain(self):
+        """
+        - Return the frames from the low gain channel of the video file with DoLP information.
+
+        Returns
+        -------
+        result : `np.ndarray`
+            DoLP Frames from the low gain channel of the video file.
+            (This DoLP data is organized in a format of float32 in range [0, 1] )
+        """
+        #check if polar_recording is initilized, else throw error
+        return self.__polar_DoLP_LG.astype(np.float32)
+        
+    @property
+    def frames_AoP_high_gain(self):
+        """
+        - Return the frames from the high gain channel of the video file with AoP information.
+
+        Returns
+        -------
+        result : `np.ndarray`
+            AoP Frames from the high gain channel of the video file.
+            (This AoP data is organized in a format of degrees in range [0, 180] )
+        """
+        #check if polar_recording is initilized, else throw error
+        return self.__polar_AoP_HG.astype(np.uint8)
+        
+    @property
+    def frames_AoP_low_gain(self):
+        """
+        - Return the frames from the low gain channel of the video file with AoP information.
+
+        Returns
+        -------
+        result : `np.ndarray`
+            AoP Frames from the low gain channel of the video file.
+            (This AoP data is organized in a format of degrees in range [0, 180] )
+        """
+        #check if polar_recording is initilized, else throw error
+        return self.__polar_AoP_LG.astype(np.uint8)
+        
+    @property
+    def frames_polar_intensity_high_gain(self):
+        """
+        - Return the frames from the high gain channel of the video file with Polar intensity information.
+
+        Returns
+        -------
+        result : `np.ndarray`
+            Polar intensity Frames from the high gain channel of the video file.
+            (This intensity data is normalized in a format of float32 in range [0, 1] )
+        """
+        #check if polar_recording is initilized, else throw error
+        return self.__polar_intensity_HG.astype(np.float32)
+        
+    @property
+    def frames_polar_intensity_low_gain(self):
+        """
+        - Return the frames from the low gain channel of the video file with Polar intensity information.
+
+        Returns
+        -------
+        result : `np.ndarray`
+            Polar intensity Frames from the low gain channel of the video file.
+            (This intensity data is normalized in a format of float32 in range [0, 1] )
+        """
+        #check if polar_recording is initilized, else throw error
+        return self.__polar_intensity_LG.astype(np.float32)
+
 
     @property
     def file_name(self) -> str:
