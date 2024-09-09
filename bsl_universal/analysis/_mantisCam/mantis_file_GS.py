@@ -54,6 +54,9 @@ class mantis_file_GS:
             0 if success, -1 if fail
         """
 
+        if not isinstance(path, Path):
+            path = Path(path)
+
         logger.trace(f"Init mantisCam video file {path}.")
         self.path = path
         self.is_2x2 = is_2x2
