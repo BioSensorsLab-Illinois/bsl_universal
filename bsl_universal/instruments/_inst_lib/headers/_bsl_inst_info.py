@@ -14,6 +14,19 @@ class _bsl_inst_info_list:
         SN_REG="(?<=,)P[0-9]+(?=,)"
     )
 
+    BSC203_HDR50 = _bsl_inst_info_class(
+        MANUFACTURE="THORLAB",
+        MODEL="BSC203+HDR50",
+        TYPE="Rotational Stage",
+        INTERFACE="FTDI",
+        USB_PID="0x6001",
+        USB_VID="0x0403",
+        QUERY_CMD="*IDN?",
+        QUERY_SN_CMD="*IDN?",
+        QUERY_E_RESP="HDR50",
+        SN_REG=""
+    )
+
     PM400 = _bsl_inst_info_class(
         MANUFACTURE="THORLAB",
         MODEL="PM400",
