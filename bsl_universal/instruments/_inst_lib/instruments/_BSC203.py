@@ -3,6 +3,7 @@ from ..headers._bsl_inst_info import _bsl_inst_info_list as inst
 from ..headers._bsl_logger import _bsl_logger as bsl_logger
 from ..headers._bsl_type import _bsl_type as bsl_type
 import time, sys
+import numpy as np
 
 class BSC203(BSC):
     """
@@ -64,6 +65,7 @@ class BSC203_HDR50(BSC203):
         time.sleep(0.3)
         self._home()
         self.logger.success("initial homing complete")
+        return
 
 
     def __del__(self, *args, **kwargs) -> None:
@@ -78,19 +80,35 @@ class BSC203_HDR50(BSC203):
         """
         super().home(bay, channel)
         self.__curr_step = 0
-        return self.blocker()
+        return self._blocker()
     
-    def step(self, stepnum):
+    def step(self, stepnum, called_by_home = False):
         """
         move in steps of 0.45 degrees, with 800 steps a revolution (home before use is advised)
         no negative values allowed for steps--FOR FUTURE UPGRADES
         This is a blocking function
         """
-        if stepnum <= 0:
+        if stepnum == 0:
+            return self._blocker()
+
+        if stepnum < 0:
             stepnum = 800-abs(stepnum)
             self.logger.warning("NEGATIVE VALUES NOT ALLOWED! GOING TO DESTINATION in POSITIVE direction...")
-            
-        super().move_relative(stepnum*self.MOTOR_RUN_STEP)
+
+        if called_by_home:
+            super().move_relative(stepnum*self.MOTOR_RUN_STEP)
+            return self._blocker()
+
+        if stepnum <= 100:    
+            super().move_relative(stepnum*self.MOTOR_RUN_STEP)
+        else:
+            self.set_velocity_params(acceleration=self.MOTOR_FREV_STEP//10, max_velocity=200*self.MOTOR_FREV_STEP, bay=0, channel=0)
+            time.sleep(0.3)
+            super().move_relative(stepnum*self.MOTOR_RUN_STEP)
+            self.set_velocity_params(acceleration=self.MOTOR_FREV_STEP//10, max_velocity=100*self.MOTOR_FREV_STEP, bay=0, channel=0)
+            time.sleep(0.3)
+        
+        
         
         try:
             self.__curr_step += stepnum
@@ -99,10 +117,10 @@ class BSC203_HDR50(BSC203):
             self.home()
             self.logger.error("did not home on startup, homing...")
         
-        return self.blocker()
+        return self._blocker()
     
 
-    def get_curr_angle(self):
+    def get_curr_angle(self, return_angle = False):
         """
         get the current OPEN LOOP angle of the device, 
         this angle will be close to the actual value but there is no guarentees.
@@ -112,7 +130,10 @@ class BSC203_HDR50(BSC203):
             self.logger.error(f"FAILED to get current angle on the HDR50 rotation stage, please home and try again!\n\n\n")
             return None
         self.logger.info(f"Current angle at {self.__curr_step * 0.45} degrees, or {self.__curr_step} steps.")
-        return self.__curr_step * 0.45
+        if return_angle:
+            return self.__curr_step * 0.45
+        else:
+            return 
 
     def _is_moving(self):
         """
@@ -122,12 +143,14 @@ class BSC203_HDR50(BSC203):
         time.sleep(0.3)
         return (self.status['moving_forward'] or self.status['moving_reverse'])
     
-    def blocker(self):
+    def _blocker(self):
+        """
+        private function to make functions blocking, when the motor is busy, wait.
+        """
         time.sleep(0.3)
         while self._is_moving():
-            print("moving")
-        print("stopped")
-        return 1
+            time.sleep(0.1)
+        return 
 
     def home(self, bay=0, channel=0):
         """
@@ -142,10 +165,34 @@ class BSC203_HDR50(BSC203):
         else:
             self.set_velocity_params(acceleration=self.MOTOR_FREV_STEP//10, max_velocity=1000*self.MOTOR_FREV_STEP, bay=0, channel=0)
             time.sleep(0.3)
-            self.step(stepnum-10)
+            self.step(stepnum-10, called_by_home=True)
             self.set_velocity_params(acceleration=self.MOTOR_FREV_STEP//10, max_velocity=100*self.MOTOR_FREV_STEP, bay=0, channel=0)
             time.sleep(0.3)
             self._home(bay, channel)
             self.__curr_step = 0
-        return self.blocker()
+        return self._blocker()
+    
+    def set_angle(self, angle:int, precision = False):
+        """
+        set the angle of the HDR50
+        precision == False; mode does not home before moving
+        precision == True; mode homes before moving
+
+        """
+        doable_step = int(np.floor(angle/0.45))
+        doable_angle = doable_step * 0.45
+        if doable_angle != angle:
+            self.logger.warning(f"angle given not divisible by step size, moving to step {doable_step}, angle {doable_angle}")
+            self.logger.warning(f"angle given not divisible by step size, your error is {angle - doable_angle}")
+        else:
+            self.logger.info(f"moving to step {doable_step}, angle {doable_angle}")
+        if precision == True:    
+            self.home()
+            self.step(doable_step)
+            self.logger.success(f"absolute angle manuver complete, step at {doable_step}, angle at {doable_angle}")
+        else:
+            self.step(doable_step-self.__curr_step)
+        return self._blocker()
+
+
 
