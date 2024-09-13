@@ -61,39 +61,47 @@ class BSC203_HDR50(BSC203):
                 self.set_home_params(velocity=100*self.MOTOR_FREV_STEP,offset_distance=224000, bay=bay_i, channel=channel_i) 
                 #homing params, might need adjustment individually
         self.logger.warning("Due to OPEN LOOP control, HDR50 is prone to errors, regular homing required.")
+        time.sleep(0.3)
+        self._home()
+        self.logger.success("initial homing complete")
+
 
     def __del__(self, *args, **kwargs) -> None:
         self.close()
         return None
     
-    def home(self, bay=0, channel=0):
+    def _home(self, bay=0, channel=0):
         """
         Cause the rotation stage to rotate to its mechanical “home” position. 
         This should result in the marking to be pointing at "0"
-        This is a none-blocking function, do not SPAM
+        This is a blocking function
         """
         super().home(bay, channel)
         self.__curr_step = 0
-        return None
+        return self.blocker()
     
-    def step(self, stepnum)->None:
+    def step(self, stepnum):
         """
         move in steps of 0.45 degrees, with 800 steps a revolution (home before use is advised)
         no negative values allowed for steps--FOR FUTURE UPGRADES
-        This is a none-blocking function, do not SPAM
+        This is a blocking function
         """
         if stepnum <= 0:
             stepnum = 800-abs(stepnum)
             self.logger.warning("NEGATIVE VALUES NOT ALLOWED! GOING TO DESTINATION in POSITIVE direction...")
             
         super().move_relative(stepnum*self.MOTOR_RUN_STEP)
+        
         try:
             self.__curr_step += stepnum
             self.__curr_step = self.__curr_step % 800
         except:
             self.home()
             self.logger.error("did not home on startup, homing...")
+        
+        return self.blocker()
     
+
     def get_curr_angle(self):
         """
         get the current OPEN LOOP angle of the device, 
@@ -106,14 +114,38 @@ class BSC203_HDR50(BSC203):
         self.logger.info(f"Current angle at {self.__curr_step * 0.45} degrees, or {self.__curr_step} steps.")
         return self.__curr_step * 0.45
 
-    # def fast_homing_beta(self, bay=0, channel=0):
-    #     """
-    #     Optimized homing algorithm
-    #     """
-    #     stepnum = 800 - self.__curr_step
-    #     super().move_relative((stepnum-10)*self.MOTOR_RUN_STEP)
-    #     time.sleep(5+stepnum*0.01)
-    #     super().home(bay, channel)
-    #     self.__curr_step = 0
-    #     return 1
+    def _is_moving(self):
+        """
+        True: the system is moving
+        False: the system is not moving
+        """
+        time.sleep(0.3)
+        return (self.status['moving_forward'] or self.status['moving_reverse'])
+    
+    def blocker(self):
+        time.sleep(0.3)
+        while self._is_moving():
+            print("moving")
+        print("stopped")
+        return 1
+
+    def home(self, bay=0, channel=0):
+        """
+        Optimized homing algorithm. If the current position is very close to 0, it will home normally. 
+        But if the current position is far from home, it will home in crazy mode. 
+        Be careful, DON'T touch the stage when you use this--Bill Yang
+        """
+        stepnum = 800 - self.__curr_step
+        if stepnum >= 750:
+            self._home()
+            self.__curr_step = 0
+        else:
+            self.set_velocity_params(acceleration=self.MOTOR_FREV_STEP//10, max_velocity=1000*self.MOTOR_FREV_STEP, bay=0, channel=0)
+            time.sleep(0.3)
+            self.step(stepnum-10)
+            self.set_velocity_params(acceleration=self.MOTOR_FREV_STEP//10, max_velocity=100*self.MOTOR_FREV_STEP, bay=0, channel=0)
+            time.sleep(0.3)
+            self._home(bay, channel)
+            self.__curr_step = 0
+        return self.blocker()
 
