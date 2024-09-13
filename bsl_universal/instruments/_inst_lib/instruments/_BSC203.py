@@ -1,4 +1,4 @@
-from thorlabs_apt_device import BSC
+from ._thorlabs_apt_device.devices import BSC
 from ..headers._bsl_inst_info import _bsl_inst_info_list as inst
 from ..headers._bsl_logger import _bsl_logger as bsl_logger
 from ..headers._bsl_type import _bsl_type as bsl_type
