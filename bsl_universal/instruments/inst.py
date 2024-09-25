@@ -1,4 +1,4 @@
-from ._inst_lib.instruments import _PM400, _HR4000CG, _M69920, _PM100D, _RS_7_1, _SP_2150, _mantisCam, _DC2200, _CS260B, _Futek_USB_520
+from ._inst_lib.instruments import _PM400, _HR4000CG, _M69920, _PM100D, _RS_7_1, _SP_2150, _mantisCam, _DC2200, _CS260B, _Futek_USB_520, _BSC203
 from loguru import logger as __logger
 import sys as __sys
 
@@ -21,6 +21,12 @@ def PM100D(device_sn:str="") -> _PM100D.PM100D:
     if not __is_logger_ready:
         init_logger()
     return _PM100D.PM100D(device_sn)
+
+# Instrument Class for Thorlabs BSC203 Motor Controller with HDR50
+def BSC203_HDR50() -> _BSC203.BSC203_HDR50:
+    if not __is_logger_ready:
+        init_logger()
+    return _BSC203.BSC203_HDR50()
 
 # Instrument Class for Thorlabs PM400 Power Meter
 def PM400(device_sn:str="") -> _PM400.PM400:
