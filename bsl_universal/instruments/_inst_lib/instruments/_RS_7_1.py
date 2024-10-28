@@ -384,7 +384,7 @@ class RS_7_1:
         return None
 
     #checked
-    def set_power_chans(self, chans:Union['list[int]', NDArray[np.int_], int], powers:Union['list[float]', NDArray[np.float_], float], unit:POWER_UNIT=POWER_UNIT.PERCENTAGE, irr_distance_mm:int=0) -> None:
+    def set_power_chans(self, chans:Union['list[int]', NDArray[np.int_], int], powers:Union['list[float]', NDArray[np.float64], float], unit:POWER_UNIT=POWER_UNIT.PERCENTAGE, irr_distance_mm:int=0) -> None:
         """
         - Set the output power of the individual LED channel[s] tothe 
         specified unit and power.
@@ -550,7 +550,7 @@ class RS_7_1:
     #checked
     def set_spectrum_raw(
         self, 
-        spectrum:Union['list[float]', NDArray[np.float_]], 
+        spectrum:Union['list[float]', NDArray[np.float64]], 
         *,
         power:float=0, 
         power_unit:POWER_UNIT=POWER_UNIT.RADIANCE, 

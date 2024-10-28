@@ -58,7 +58,7 @@ class HR4000CG:
         self.device_model = self.spec.model
         return None
 
-    def get_wavelength(self) -> NDArray[numpy.float_]:
+    def get_wavelength(self) -> NDArray[numpy.float64]:
         """
         - wavelength array of the spectrometer
         - wavelengths in (nm) corresponding to each pixel of the spectrometer
@@ -70,7 +70,7 @@ class HR4000CG:
         """
         return self.spec.wavelengths()
 
-    def get_intensity(self, correct_dark_counts: bool = False, correct_nonlinearity: bool = False) -> NDArray[numpy.float_]:
+    def get_intensity(self, correct_dark_counts: bool = False, correct_nonlinearity: bool = False) -> NDArray[numpy.float64]:
         """
         - measured intensity array in (a.u.)
 
@@ -100,7 +100,7 @@ class HR4000CG:
         """
         return self.spec.intensities(correct_dark_counts, correct_nonlinearity)
 
-    def get_spectrum(self, correct_dark_counts:bool=False, correct_nonlinearity:bool=False) -> NDArray[numpy.float_]:
+    def get_spectrum(self, correct_dark_counts:bool=False, correct_nonlinearity:bool=False) -> NDArray[numpy.float64]:
         """
         - returns wavelengths and intensities as single array
 

@@ -10,6 +10,9 @@ from loguru import logger
 
 class mantis_file:
     def __init__(self, path: Path, x3_conv: bool = False, conv_param: float = 0.48, origin=(0,0), ):
+        if not isinstance(path, Path):
+            path = Path(path)
+
         logger.trace(f"Init mantisCam video file {path}.")
         self.path = path
         self.x3_conv = x3_conv
