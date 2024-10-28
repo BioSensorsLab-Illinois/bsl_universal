@@ -143,10 +143,11 @@ class MantisCamCtrl:
                         # If match, we procede to the next phase: recording
                         if received_exposure_ms == round(self.__e_exp_time):
                             self.__e_exp_matched = True
+                        if np.round(received_exposure_ms/1000) == round(self.__e_exp_time):
+                            self.__e_exp_matched = True
                         if self.__is_GSENSE:
                             self.__e_exp_matched = True
         time.sleep(self.__ZMQ_CMD_DELAY)
-
 
     def __zmq_send(self, topic: str, name: str, msg: Any):
         # Abstracted zmq command send with logging
