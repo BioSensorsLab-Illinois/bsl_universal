@@ -144,6 +144,11 @@ class mantis_file_GS:
         self.__polar_AoP_HG = 0.5 * np.arctan2(S2_HG, S1_HG) * 180 / np.pi + 90
         self.__polar_DoLP_LG = np.sqrt(S1_LG**2 + S2_LG**2) / (self.__polar_intensity_LG)
         self.__polar_AoP_LG = 0.5 * np.arctan2(S2_LG, S1_LG) * 180 / np.pi + 90
+
+    
+    def __check_polar_init(self):
+        if not hasattr(self, '__polar_HG_I0'):
+            raise ValueError("Polar recording is not initialized. Please call init_polar_recording() first.")
         
     @property
     def frames_DoLP_high_gain(self):
@@ -157,6 +162,7 @@ class mantis_file_GS:
             (This DoLP data is organized in a format of float32 in range [0, 1] )
         """
         #check if polar_recording is initilized, else throw error
+        self.__check_polar_init()
         return self.__polar_DoLP_HG.astype(np.float32)
         
     @property
@@ -171,6 +177,7 @@ class mantis_file_GS:
             (This DoLP data is organized in a format of float32 in range [0, 1] )
         """
         #check if polar_recording is initilized, else throw error
+        self.__check_polar_init()
         return self.__polar_DoLP_LG.astype(np.float32)
         
     @property
@@ -185,6 +192,7 @@ class mantis_file_GS:
             (This AoP data is organized in a format of degrees in range [0, 180] )
         """
         #check if polar_recording is initilized, else throw error
+        self.__check_polar_init()
         return self.__polar_AoP_HG.astype(np.uint8)
         
     @property
@@ -199,6 +207,7 @@ class mantis_file_GS:
             (This AoP data is organized in a format of degrees in range [0, 180] )
         """
         #check if polar_recording is initilized, else throw error
+        self.__check_polar_init()
         return self.__polar_AoP_LG.astype(np.uint8)
         
     @property
@@ -213,6 +222,7 @@ class mantis_file_GS:
             (This intensity data is normalized in a format of float32 in range [0, 1] )
         """
         #check if polar_recording is initilized, else throw error
+        self.__check_polar_init()
         return self.__polar_intensity_HG.astype(np.float32)
         
     @property
@@ -227,6 +237,7 @@ class mantis_file_GS:
             (This intensity data is normalized in a format of float32 in range [0, 1] )
         """
         #check if polar_recording is initilized, else throw error
+        self.__check_polar_init()
         return self.__polar_intensity_LG.astype(np.float32)
 
 
