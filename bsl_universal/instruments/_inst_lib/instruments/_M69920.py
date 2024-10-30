@@ -16,7 +16,7 @@ class M69920:
         CURRENT_MODE = 1
         POWER_MODE = 0
 
-    def __init__(self, device_sn="", *, mode=SUPPLY_MODE.POWER_MODE, lim_current:int=50, lim_power:int=1200, default_power:int=1000) -> None:
+    def __init__(self, device_sn="", *, mode=SUPPLY_MODE.POWER_MODE, lim_current:int=50, lim_power:int=1200, default_power:int=1000, force_reset:bool=False) -> None:
         self.target_device_sn = device_sn
         self.inst = inst.M69920
         self.device_id = ""
@@ -24,7 +24,7 @@ class M69920:
         self.logger.info(f"Initiating bsl_instrument - M69920({device_sn})...")
         if self._serial_connect():
             self.logger.success(f"Connected - Newport M69920 Lamp Power Supply.\n\n\n")
-            self.__init_lamp(mode, lim_current, lim_power, default_power)
+            self.__init_lamp(mode, lim_current, lim_power, default_power, force_reset)
             self.logger.warning(f"This Arc Lamp Power Supply has been configured to work with the UV-Enhanced Xeon Arc Lamp.")
             self.logger.warning(f"All the operation parameter has been preset for this specific Arc Lamp.")
             self.logger.warning(f"You should ONLY use readonly features/functions and Lamp ON/OFF functions for the operation!")
@@ -68,15 +68,16 @@ class M69920:
         return float(resp.decode('utf-8'))
 
     
-    def __init_lamp(self, mode=SUPPLY_MODE.POWER_MODE, lim_current:int=50, lim_power:int=1200, default_power:int=1000) -> int:
+    def __init_lamp(self, mode=SUPPLY_MODE.POWER_MODE, lim_current:int=50, lim_power:int=1200, default_power:int=1000, force_reset:bool = False) -> int:
         self.serial_command("RST")
         time.sleep(5)
-        self.lamp_OFF()
-        self.__set_lamp_mode(mode)
-        self.set_lamp_current_limit(lim_current)
-        self.set_lamp_power_limit(lim_power)
-        self.set_lamp_power(default_power)
-        self.logger.success(f"Arc Lamp power supply RESETTED!")
+        if self.get_current_power() <100 or force_reset:
+        # self.lamp_OFF()
+            self.__set_lamp_mode(mode)
+            self.set_lamp_current_limit(lim_current)
+            self.set_lamp_power_limit(lim_power)
+            self.set_lamp_power(default_power)
+            self.logger.success(f"Arc Lamp power supply control initialized!")
         return 0
 
 
