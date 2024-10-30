@@ -17,7 +17,7 @@ import enum, sys, os, atexit, time
 logger_opt = logger.opt(ansi=True)
 
 class MantisCamCtrl:
-    TIMEOUT_SEC = 120
+    TIMEOUT_SEC = 60
     __ZMQ_CMD_DELAY = 0.01
 
     class FILE_SAVING_MODE(enum.Enum):
@@ -138,13 +138,16 @@ class MantisCamCtrl:
             if topic == 'raw':
                 if 'frame_meta' in msg:
                     if 'int-set' in msg['frame_meta']:
-                        received_exposure_ms = round(float(msg['frame_meta']['int-set']), 0)
+                        received_exposure_ms = float(msg['frame_meta']['int-set'])
                         logger.trace(f"Received frame exposure {received_exposure_ms}, expected frame exposure {self.__e_exp_time}.")
                         # If match, we procede to the next phase: recording
-                        if received_exposure_ms == round(self.__e_exp_time):
-                            self.__e_exp_matched = True
-                        if np.round(received_exposure_ms/1000) == round(self.__e_exp_time):
-                            self.__e_exp_matched = True
+                        if self.__e_exp_time <1:
+                            if (received_exposure_ms < (self.__e_exp_time * 1.2)) and (received_exposure_ms > (self.__e_exp_time * 0.8)):
+                                self.__e_exp_matched = True 
+                        else:
+                            if (received_exposure_ms < (self.__e_exp_time * 1.05)) and (received_exposure_ms > (self.__e_exp_time * 0.95)):
+                                self.__e_exp_matched = True 
+
                         if self.__is_GSENSE:
                             self.__e_exp_matched = True
         time.sleep(self.__ZMQ_CMD_DELAY)
@@ -251,7 +254,7 @@ class MantisCamCtrl:
 
     
 
-    def set_exposure_ms(self, exp_time_ms: float) -> None:
+    def set_exposure_ms(self, exp_time_ms: float = 15, raise_error: bool = False) -> None:
         """
         - Set the camera exposure time to desired value in milliseconds.
 
@@ -280,8 +283,12 @@ class MantisCamCtrl:
                 break
             logger.trace(f"Camera - exposure mismatch, expected {exp_time_ms}ms, current {self.__e_exp_time}ms.")
             if time.time() - time_start > self.TIMEOUT_SEC:
-                logger.error(f"ERROR - Camera exposure time not match, timed out!")
-                raise bsl_type.DeviceTimeOutError
+                # try to set the exposure again
+                logger.warning(f"Camera - exposure mismatch, expected {exp_time_ms}ms, current {self.__e_exp_time}ms.")
+                if raise_error:
+                    logger.error(f"ERROR - Camera exposure time not match, timed out!")
+                    raise bsl_type.DeviceTimeOutError
+                self.set_exposure_ms(exp_time_ms, raise_error=True)
 
 
     def set_file_name(self, file_name: str="video", time_stamp_only:bool=False) -> None:
