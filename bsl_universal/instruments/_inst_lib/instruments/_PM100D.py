@@ -66,20 +66,20 @@ class PM100D:
         self.logger.info("Power Meter Zeroed.")
         return None
 
-    def get_preset_wavelength(self) -> float:
+    def get_preset_wavelength(self) -> np.float64:
         """
         - Get preset wavelength of interest for power measurement 
         from the power meter.
 
         Returns
         --------
-        wavelength : `float`
+        wavelength : `np.float64`
             Preset wavelength of interest for power measurement.
         """
         try_count = 0
         while True:
             try:
-                wavelength = float(self._com.query("SENS:CORR:WAV?"))
+                wavelength = np.float64(self._com.query("SENS:CORR:WAV?"))
                 self.logger.info( f"Current preset wavelenght: {repr(wavelength)}nm")
                 break
             except:
@@ -92,19 +92,19 @@ class PM100D:
                     self.logger.warning("timeout - Trying to get the wavelength again..")
         return wavelength
     
-    def set_preset_wavelength(self, wl:float) -> float:
+    def set_preset_wavelength(self, wl:np.float64) -> np.float64:
         """
         - Set preset wavelength of interest for power measurement 
         from the power meter.
 
         Parameters
         ----------
-        wl : `float`
+        wl : `np.float64`
             Wavelength of interest for power measurement.
 
         Returns
         --------
-        wavelength : `float`
+        wavelength : `np.float64`
             Preset wavelength of interest for power measurement readback
             from the power meter.
         """
@@ -126,17 +126,17 @@ class PM100D:
 
         return self.get_preset_wavelength()
     
-    def get_attenuation_dB(self) -> float:
+    def get_attenuation_dB(self) -> np.float64:
         """
         - Get current dB attenuation from the power meter.
 
         Returns
         --------
-        att_dB : `float`
+        att_dB : `np.float64`
             Current dB attenuation of the power meter.
         """
         # in dB (range for 60db to -60db) gain or attenuation, default 0 dB
-        attenuation_dB = float( self._com.query("SENS:CORR:LOSS:INP:MAGN?") )
+        attenuation_dB = np.float64( self._com.query("SENS:CORR:LOSS:INP:MAGN?") )
         self.logger.info(f"Current attenuation at {attenuation_dB}dB.")
         return attenuation_dB
 
@@ -174,7 +174,7 @@ class PM100D:
         self.logger.info(f"Average count is set to {cnt}.")
         return self.get_average_count()
             
-    def get_measured_power(self) -> float:
+    def get_measured_power(self) -> np.float64:
         """
         - Get one power measurement form the power meter 
         with amount of `average_count` individual measurements.
@@ -185,14 +185,14 @@ class PM100D:
 
         Returns
         --------
-        power : `float`
+        power : `np.float64`
             The average of all of theindividual measurements.
         """
-        power = float(self._com.query("MEAS:POW?"))
+        power = np.float64(self._com.query("MEAS:POW?"))
         self.logger.info(f"Current Power measured: {power*1000:.2f}mW.")
         return power
     
-    def get_measured_power_avg(self, avg:int=1) -> float:
+    def get_measured_power_avg(self, avg:int=1) -> np.float64:
         """
         - Get one power measurement form the power meter 
         with amount of `average_count` individual measurements.
@@ -203,19 +203,19 @@ class PM100D:
 
         Returns
         --------
-        power : `float`
+        power : `np.float64`
             The average of all of theindividual measurements.
         """
         cnt = 0
         power = 0
         while cnt<avg:
             cnt+=1
-            power += float(self._com.query("MEAS:POW?"))
+            power += np.float64(self._com.query("MEAS:POW?"))
         power = power/avg
         self.logger.info(f"Avg Power measured: {power*1000:.2f}mW.")
         return power
     
-    def get_measured_power_density(self) -> float:
+    def get_measured_power_density(self) -> np.float64:
         """
         - Get one power density measurement form the power meter 
         with amount of `average_count` individual measurements.
@@ -226,14 +226,14 @@ class PM100D:
 
         Returns
         --------
-        power : `float`
+        power : `np.float64`
             (W/cm^2) The average of all of theindividual measurements.
         """
-        power = float(self._com.query("MEAS:PDEN?"))
+        power = np.float64(self._com.query("MEAS:PDEN?"))
         self.logger.info(f"Current Power measured: {power*1000:.2f}mW.")
         return power
     
-    def get_measured_power_density_avg(self, avg:int=1) -> float:
+    def get_measured_power_density_avg(self, avg:int=1) -> np.float64:
         """
         - Get one power density measurement form the power meter 
         with amount of `average_count` individual measurements.
@@ -244,14 +244,14 @@ class PM100D:
 
         Returns
         --------
-        power : `float`
+        power : `np.float64`
             (W/cm^2) The average of all of theindividual measurements.
         """
         cnt = 0
         power = 0
         while cnt<avg:
             cnt+=1
-            power += float(self._com.query("MEAS:PDEN?"))
+            power += np.float64(self._com.query("MEAS:PDEN?"))
         power = power/avg
         self.logger.info(f"Avg Power measured: {power*1000:.2f}mW.")
         return power
@@ -266,18 +266,18 @@ class PM100D:
         range : `int`
             ???
         """
-        power_range = float(self._com.query("SENS:POW:RANG:UPP?")) # CHECK RANGE
+        power_range = np.float64(self._com.query("SENS:POW:RANG:UPP?")) # CHECK RANGE
         self.logger.info(f"Power measuring range: {power_range*1000:.1f}mW.")
         return power_range
 
     #un tested
-    def set_power_range(self, range:float) -> None:
+    def set_power_range(self, range:np.float64) -> None:
         """
         - ???
 
         Parameters
         --------
-        range : `float`
+        range : `np.float64`
             ???
         """
         self._com.write("SENS:POW:RANG:UPP {}".format(range))
@@ -313,30 +313,30 @@ class PM100D:
         else:
             self._com.write("SENS:POW:RANG:AUTO OFF") # turn off auto range
     
-    def get_measured_frequency(self) -> float:
+    def get_measured_frequency(self) -> np.float64:
         """
         - Get the measured frequency from the power meter.
 
         Returns
         --------
-        freq : `float`
+        freq : `np.float64`
             Measured frequency `Hz` from the power meter.
         """
-        frequency = float(self._com.query("MEAS:FREQ?"))
+        frequency = np.float64(self._com.query("MEAS:FREQ?"))
         self.logger.info(f"Measured frequency: {frequency:.1f}Hz.")
         return frequency
 
-    def get_zero_magnitude(self) -> float:
+    def get_zero_magnitude(self) -> np.float64:
         """
         - Get the zero_calibration magnitude (`Watts`) from the power meter.
 
         Returns
         --------
-        zero_mag : `float`
+        zero_mag : `np.float64`
             Current zero_calibration magnitude in `Watts`.
         """
         resp = self._com.query("SENS:CORR:COLL:ZERO:MAGN?")
-        zero_magnitude = float(resp)
+        zero_magnitude = np.float64(resp)
         self.logger.info(f"Current Zero_magnitude: {zero_magnitude*1000:.2f}mW.")
         return zero_magnitude
         
@@ -354,47 +354,47 @@ class PM100D:
         self.logger.info(f"Zero_state: {repr(zero_state)}.")
         return zero_state
 
-    def get_photodiode_response(self) -> float:
+    def get_photodiode_response(self) -> np.float64:
         """
         - Get the photodiode_response magnitude (`A/W`) from the power meter.
 
         Returns
         --------
-        photo_resp : `float`
+        photo_resp : `np.float64`
             Current photodiode_response magnitude in `A/W`.
         """
         resp = self._com.query("SENS:CORR:POW:PDIOde:RESP?")
         #resp = self.ask("SENS:CORR:VOLT:RANG?")
         #resp = self.ask("SENS:CURR:RANG?")
-        photodiode_response = float(resp) # A/W
+        photodiode_response = np.float64(resp) # A/W
         self.logger.info(f"Current Photodiode_response: {photodiode_response*1000:.1f}mA/W.")
         return photodiode_response 
     
-    def get_measured_current(self) -> float:
+    def get_measured_current(self) -> np.float64:
         """
         - Get the measured_current magnitude (`A`) from the power meter.
 
         Returns
         --------
-        current : `float`
+        current : `np.float64`
             Current measured_current magnitude in `Amps`.
         """
         resp = self._com.query("MEAS:CURR?")
-        current = float(resp)
+        current = np.float64(resp)
         self.logger.info(f"Measured current: {current*1000:.1f}mA.")
         return current
     
-    def get_current_range(self) -> float:
+    def get_current_range(self) -> np.float64:
         """
         - Get the current_range upper bound (`A`) from the power meter.
 
         Returns
         --------
-        max_current : `float`
+        max_current : `np.float64`
             Current max current_range magnitude in `Amps`.
         """
         resp = self._com.query("SENS:CURR:RANG:UPP?")
-        current_range = float(resp)
+        current_range = np.float64(resp)
         self.logger.info(f"Preset current_range: {current_range*1000:.1f}mA.")
         return current_range
 
