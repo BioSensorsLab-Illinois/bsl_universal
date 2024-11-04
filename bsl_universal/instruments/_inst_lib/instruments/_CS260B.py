@@ -70,11 +70,11 @@ class CS260B:
         - Sequential operation order of the gratings is #1 -> #3 -> #2 -> #4
         """
         # set grating based on wavelength and grating efficiency curves:
-        if wavelength < 516:
+        if wavelength < 558:
             self.set_grating(1)
-        elif wavelength < 754:
+        elif wavelength < 746:
             self.set_grating(2)
-        elif wavelength < 1480:
+        elif wavelength < 1300:
             self.set_grating(3)
         else:
             self.set_grating(4)
