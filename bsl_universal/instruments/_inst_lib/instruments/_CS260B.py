@@ -74,7 +74,7 @@ class CS260B:
             self.set_grating(1)
         elif wavelength < 746:
             self.set_grating(2)
-        elif wavelength < 1300:
+        elif wavelength < 1350:
             self.set_grating(3)
         else:
             self.set_grating(4)
