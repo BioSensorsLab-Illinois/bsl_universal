@@ -9,7 +9,7 @@ from loguru import logger
 (GS_BLUE_X, GS_BLUE_Y) = (2,2)
 
 class mantis_file:
-    def __init__(self, path: Path, x3_conv: bool = False, conv_param: float = 0.48, origin=(0,0), ):
+    def __init__(self, path: Path, x3_conv: bool = False, conv_param: float = 1, origin=(0,0)):
         if not isinstance(path, Path):
             path = Path(path)
 
@@ -47,7 +47,7 @@ class mantis_file:
         # Ensure the frame is float for proper convolution. Convert it back to uint16 later.
         frame_float = np.flip(frame).astype(np.float32)
         result = cv2.filter2D(frame_float, -1, filter)
-        return np.roll(np.flip(result), 1, axis=1)
+        return np.roll(np.flip(result), 1, axis=1).astype(np.uint16)
     
 
     @property
