@@ -9,7 +9,7 @@ from loguru import logger
 (GS_BLUE_X, GS_BLUE_Y) = (2,2)
 
 class mantis_file:
-    def __init__(self, path: Path, x3_conv: bool = False, conv_param: float = 0.48, origin=(0,0), ):
+    def __init__(self, path: Path, x3_conv: bool = False, conv_param: float = 1, origin=(0,0), ):
         logger.trace(f"Init mantisCam video file {path}.")
         self.path = path
         self.x3_conv = x3_conv
@@ -44,7 +44,7 @@ class mantis_file:
         # Ensure the frame is float for proper convolution. Convert it back to uint16 later.
         frame_float = np.flip(frame).astype(np.float32)
         result = cv2.filter2D(frame_float, -1, filter)
-        return np.roll(np.flip(result), 1, axis=1)
+        return np.roll(np.flip(result), 1, axis=1).astype(np.uint16)
     
 
     @property
@@ -87,28 +87,6 @@ class mantis_file:
         with h5py.File(self.path, 'r') as file:
             return np.array(file['camera']['timestamp'])
 
-    @property
-    def frames_GS_high_gain(self) -> np.ndarray:
-        with h5py.File(self.path) as file:
-            return self.frames[:,:,0:self.n_cols//2,:]
-
-    @property
-    def frames_GS_low_gain(self) -> np.ndarray:
-        with h5py.File(self.path) as file:
-            return self.frames[:,:,self.n_cols//2:,:]
-
-    # @property
-    # def frames_GS_low_gain_NIR(self) -> np.ndarray:
-    #     with h5py.File(self.path) as file:
-    #         return self.frames_GS_low_gain_NIR()[:,GS_NIR_X::4,GS_NIR_Y::4,:]
-
-    # @property
-    # def frames_GS_low_gain_RGB(self) -> np.ndarray:
-    #     with h5py.File(self.path) as file:
-    #         return self.frames_GS_low_gain_NIR()[:,GS_NIR_X::4,GS_NIR_Y::4,:]
-
-    
-    @property
     def n_frames(self) -> int:
         with h5py.File(self.path, 'r') as file:
             return file['camera']['frames'].shape[0]
@@ -135,7 +113,7 @@ class mantis_file:
         return False
 
     @property
-    def raw_data_shape(self) -> 'tuple([int,int,int,int])':
+    def raw_data_shape(self):
         '''
         Return the raw data shape of the file in following order:
         [#_frames, #_rows, #_cols, #_channels]
@@ -143,7 +121,7 @@ class mantis_file:
         return (self.n_frames, self.n_rows, self.n_cols, self.n_chans)
     
     @property
-    def frame_shape(self) -> 'tuple([int,int,int])':
+    def frame_shape(self):
         '''
         Return the raw data shape of the file in following order:
         [#_rows, #_cols, #_channels]

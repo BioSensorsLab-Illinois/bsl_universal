@@ -2,9 +2,6 @@ import h5py
 import numpy as np
 from pathlib import Path
 from loguru import logger
-import colour
-from colour_demosaicing import (
-    demosaicing_CFA_Bayer_Menon2007)
 
 class mantis_file_GS:
     K_HG_BSI = 1.813 * 16
@@ -356,8 +353,8 @@ class mantis_file_GS:
         bayer[:,1::2,0::2] = G
         bayer[:,0::2,1::2] = G
         bayer[:,1::2,1::2] = B  
-        for i in range(self.n_frames):
-            RGB[i] = colour.cctf_encoding(demosaicing_CFA_Bayer_Menon2007(bayer[i], 'RGGB')).astype(np.float32) 
+        # for i in range(self.n_frames):
+            # RGB[i] = colour.cctf_encoding(demosaicing_CFA_Bayer_Menon2007(bayer[i], 'RGGB')).astype(np.float32) 
         return RGB
     
     @property
