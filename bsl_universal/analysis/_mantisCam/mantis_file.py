@@ -9,7 +9,7 @@ from loguru import logger
 (GS_BLUE_X, GS_BLUE_Y) = (2,2)
 
 class mantis_file:
-    def __init__(self, path: Path, x3_conv: bool = False, conv_param: float = 1, origin=(0,0)):
+    def __init__(self, path: Path, x3_conv: bool = False, conv_param: float = 0.8, origin=(0,0)):
         if not isinstance(path, Path):
             path = Path(path)
 

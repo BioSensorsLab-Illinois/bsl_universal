@@ -7,7 +7,7 @@ from loguru import logger
 import re, os
 
 class mantis_folder:
-    def __init__(self, path:Path, sort_with_exp:bool=False, x3_conv:bool=False, x3_conv_param=1):
+    def __init__(self, path:Path, sort_with_exp:bool=False, x3_conv:bool=False, x3_conv_param=0.8):
         """
         Load objects points for a folder of mantisCam recording files.
 
