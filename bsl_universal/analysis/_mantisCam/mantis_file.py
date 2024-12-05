@@ -3,10 +3,6 @@ import numpy as np
 from pathlib import Path
 from loguru import logger
 
-(GS_NIR_X, GS_NIR_Y) = (1,1)
-(GS_RED_X, GS_RED_Y) = (1,2)
-(GS_GREEN_X, GS_GREEN_Y) = (2,1)
-(GS_BLUE_X, GS_BLUE_Y) = (2,2)
 
 class mantis_file:
     def __init__(self, path: Path, x3_conv: bool = False, conv_param: float = 0.8, origin=(0,0)):
