@@ -277,7 +277,7 @@ class MantisCamCtrl:
             if self.__e_exp_matched:
                 if self.__is_GSENSE:
                     total_sleep_time = cur_exp_time/1000 + exp_time_ms/1000
-                    time.sleep(total_sleep_time*2+0.1)
+                    time.sleep(total_sleep_time*2+0.5)
                 logger.info(f"Camera - Exposure time set to {exp_time_ms}ms and verified.")
                 self.cur_exp_time_ms = exp_time_ms
                 break
@@ -403,16 +403,13 @@ class MantisCamCtrl:
             self.set_exposure_ms(next_exp)
 
             if next_exp == min_exp_ms or next_exp == max_exp_ms:
-                logger.warning(f"Auto-Exposure - Exposure time reached the limit, auto exposure terminated.")
+                logger.info(f"Auto-Exposure - Exposure time reached the limit, auto exposure terminated.")
                 return self.cur_exp_time_ms
-
-        return False
+            
+        logger.warning(f"Auto-Exposure - ERROR, maximum iteration reached, auto exposure terminated.")
+        return self.cur_exp_time_ms
             
         
-            
-
-
-
 
     def set_folder_name(self, create_new_folder:bool=True, time_stamp_only:bool=False, folder_name: set="video"):
         """
