@@ -44,6 +44,12 @@ class CS260B:
         self.get_errors()
         self.set_wavelength(450.0)
         self.get_idle(blocking=True)
+
+        self.set_grating(1)
+        self.set_grating(2)
+        self.set_grating(3)
+        self.set_grating(4)
+        self.get_idle(blocking=True)
         return 0    
     
 
