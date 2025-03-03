@@ -4,7 +4,16 @@ from .mantis_file import mantis_file
 from numpy.typing import NDArray
 from tqdm import tqdm
 from loguru import logger
-import re, os
+import re, os, sys
+
+logger.configure(
+    handlers=[
+        {
+            "sink": sys.stderr,
+            "format": "<green>{time:HH:mm:ss}</green> | <level>{level}</level> | {function}:{line} - <level>{message}</level>"
+        }
+    ]
+)
 
 class mantis_folder:
     def __init__(self, path:Path, sort_with_exp:bool=False, x3_conv:bool=False, x3_conv_param=0.8):

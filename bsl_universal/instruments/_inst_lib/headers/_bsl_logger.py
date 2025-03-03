@@ -1,4 +1,5 @@
 from loguru import logger
+import sys
 from ._bsl_type import _bsl_type as bsl_type
 from ._bsl_inst_info import _bsl_inst_info_class as inst
 
@@ -9,6 +10,13 @@ class _bsl_logger:
     def __init__(self, cur_inst: inst, device_id: str="N/A") -> None:
         self.__inst = cur_inst
         self.device_id = device_id
+        logger.configure(
+        handlers=[
+            {
+                "sink": sys.stderr,
+                "format": "<green>{time:HH:mm:ss}</green> | <level>{level}</level> | {function}:{line} - <level>{message}</level>"
+            }
+        ])
         logger.info(f"    {self.__inst.MODEL}  ({self.device_id}) - Logger instance initilized")
         pass
 

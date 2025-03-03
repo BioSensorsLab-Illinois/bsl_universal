@@ -1,10 +1,17 @@
-import h5py
+import h5py, sys
 import numpy as np
 from pathlib import Path
 from loguru import logger
-import colour
-from colour_demosaicing import (
-    demosaicing_CFA_Bayer_Menon2007)
+
+
+logger.configure(
+    handlers=[
+        {
+            "sink": sys.stderr,
+            "format": "<green>{time:HH:mm:ss}</green> | <level>{level}</level> | {function}:{line} - <level>{message}</level>"
+        }
+    ]
+)
 
 class mantis_file_GS:
     K_HG_BSI = 1.813 * 16
@@ -348,15 +355,15 @@ class mantis_file_GS:
         G = (self.frames_GS_low_gain[:,self.G_loc[0]::2,self.G_loc[1]::2]/65535.0).astype(np.float32)
         B = (self.frames_GS_low_gain[:,self.B_loc[0]::2,self.B_loc[1]::2]/65535.0).astype(np.float32)
         return np.stack((R,G,B), axis=-1)
-        bayer = np.zeros((self.n_frames, 1024, 1024), dtype=np.float32)
-        RGB = np.zeros((self.n_frames, 1024, 1024, 3), dtype=np.float32)
-        bayer[:,0::2,0::2] = R
-        bayer[:,1::2,0::2] = G
-        bayer[:,0::2,1::2] = G
-        bayer[:,1::2,1::2] = B  
-        for i in range(self.n_frames):
-            RGB[i] = colour.cctf_encoding(demosaicing_CFA_Bayer_Menon2007(bayer[i], 'RGGB')).astype(np.float32) 
-        return RGB
+        # bayer = np.zeros((self.n_frames, 1024, 1024), dtype=np.float32)
+        # RGB = np.zeros((self.n_frames, 1024, 1024, 3), dtype=np.float32)
+        # bayer[:,0::2,0::2] = R
+        # bayer[:,1::2,0::2] = G
+        # bayer[:,0::2,1::2] = G
+        # bayer[:,1::2,1::2] = B  
+        # for i in range(self.n_frames):
+        #     RGB[i] = colour.cctf_encoding(demosaicing_CFA_Bayer_Menon2007(bayer[i], 'RGGB')).astype(np.float32) 
+        # return RGB
     
     def __demoasic_SP(self, HDRraw) -> np.ndarray:
         assert(self.is_2x2)
@@ -364,15 +371,15 @@ class mantis_file_GS:
         G = np.round(HDRraw[:,self.G_loc[0]::2,self.G_loc[1]::2]/65535.0).astype(np.float32)
         B = np.round(HDRraw[:,self.B_loc[0]::2,self.B_loc[1]::2]/65535.0).astype(np.float32)
         return np.stack((R,G,B), axis=-1)
-        bayer = np.zeros((self.n_frames, 1024, 1024), dtype=np.float32)
-        RGB = np.zeros((self.n_frames, 1024, 1024, 3), dtype=np.float32)
-        bayer[:,0::2,0::2] = R
-        bayer[:,1::2,0::2] = G
-        bayer[:,0::2,1::2] = G
-        bayer[:,1::2,1::2] = B  
-        for i in range(self.n_frames):
-            RGB[i] = colour.cctf_encoding(demosaicing_CFA_Bayer_Menon2007(bayer[i], 'RGGB')).astype(np.float32) 
-        return RGB
+        # bayer = np.zeros((self.n_frames, 1024, 1024), dtype=np.float32)
+        # RGB = np.zeros((self.n_frames, 1024, 1024, 3), dtype=np.float32)
+        # bayer[:,0::2,0::2] = R
+        # bayer[:,1::2,0::2] = G
+        # bayer[:,0::2,1::2] = G
+        # bayer[:,1::2,1::2] = B  
+        # for i in range(self.n_frames):
+        #     RGB[i] = colour.cctf_encoding(demosaicing_CFA_Bayer_Menon2007(bayer[i], 'RGGB')).astype(np.float32) 
+        # return RGB
     
     @property
     def frames_GS_high_gain_SP(self) -> np.ndarray:
@@ -503,7 +510,7 @@ class mantis_file_GS:
         return False
 
     @property
-    def raw_data_shape(self) -> 'tuple([int,int,int,int])':
+    def raw_data_shape(self):
         '''
         Return the raw data shape of the file in following order:
         [#_frames, #_rows, #_cols, #_channels]
@@ -511,7 +518,7 @@ class mantis_file_GS:
         return (self.n_frames, self.n_rows, self.n_cols)
     
     @property
-    def frame_shape(self) -> 'tuple([int,int,int])':
+    def frame_shape(self):
         '''
         Return the raw data shape of the file in following order:
         [#_rows, #_cols, #_channels]

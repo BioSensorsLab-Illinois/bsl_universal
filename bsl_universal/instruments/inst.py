@@ -2,6 +2,7 @@ from ._inst_lib.instruments import _PM400, _HR4000CG, _M69920, _PM100D, _RS_7_1,
 from loguru import logger as __logger
 import sys as __sys
 
+
 __is_logger_ready = False
 __GLOBAL_LOG_LEVEL = "DEBUG"
 
@@ -14,6 +15,15 @@ def init_logger(LOG_LEVEL:str="DEBUG"):
     __logger.add(__sys.stdout, colorize=True, format=__format_str, level=LOG_LEVEL, diagnose=False)
     __logger.success(f"Logger initlized with LOG_LEVEL = \"{LOG_LEVEL}\".")
     __is_logger_ready = True
+
+    __logger.configure(
+    handlers=[
+        {
+            "sink": __sys.stderr,
+            "format": "<green>{time:HH:mm:ss}</green> | <level>{level}</level> | {function}:{line} - <level>{message}</level>"
+        }
+    ]
+)
     return None
 
 # Instrument Class for Thorlabs PM100D Power Meter
