@@ -20,7 +20,10 @@ setup(
           'libusb>=1.0.24b3',
           'pycolorname>=0.1.0',
           'scikit-image>=0.19.2',
-          'tqdm>=4.62.3'
+          'tqdm>=4.62.3',
+          'h5py>=3.0.0',
+          'opencv-python>=4.5.0',
+          'pyzmq>=22.0.0'
       ],
   classifiers=[
     'Development Status :: 3 - Alpha',      # Chose either "3 - Alpha", "4 - Beta" or "5 - Production/Stable" as the current state of your package

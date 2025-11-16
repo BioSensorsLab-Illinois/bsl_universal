@@ -1,0 +1,33 @@
+# Core dependencies
+loguru>=0.6.0
+numpy>=1.22.0
+tqdm>=4.62.3
+
+# HDF5 file support
+h5py>=3.0.0
+
+# Image processing
+opencv-python>=4.5.0
+scikit-image>=0.19.2
+
+# Serial communication
+pyserial>=3.5
+
+# VISA instrument control
+pyvisa>=1.11.3
+pyvisa-py>=0.5.2  # PyVISA backend
+
+# Spectrometer support
+seabreeze>=2.0.2
+
+# USB support (required by seabreeze and pyvisa-py)
+libusb>=1.0.24b3
+
+# Color analysis
+pycolorname>=0.1.0
+
+# ZMQ communication (for MantisCam)
+pyzmq>=22.0.0
+
+# Note: MantisCam is an external optional dependency that should be
+# installed separately if MantisCam instrument support is needed

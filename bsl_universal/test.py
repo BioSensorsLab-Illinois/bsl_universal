@@ -1,6 +1,5 @@
 #%%
 import numpy as np
-import matplotlib.pyplot as plt
 from analysis import mantis_file_GS
 
 file_path = "/Users/zz4/Downloads/subject_0_sample_0_view_0_2024-08-06_15-32-57_308_10000.h5"
