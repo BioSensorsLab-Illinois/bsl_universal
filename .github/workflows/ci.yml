@@ -186,7 +186,7 @@ jobs:
           print(f"Resolved release version: {release_version}")
 
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
-              fh.write(f"release_version={release_version}\\n")
+              fh.write(f"release_version={release_version}\n")
           PY
 
       - name: Build unified distributions
