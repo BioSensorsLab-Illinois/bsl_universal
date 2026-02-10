@@ -2,7 +2,7 @@ from ._thorlabs_apt_device.devices import BSC
 from ..headers._bsl_inst_info import _bsl_inst_info_list as inst
 from ..headers._bsl_logger import _bsl_logger as bsl_logger
 from ..headers._bsl_type import _bsl_type as bsl_type
-import time, sys
+import time
 import numpy as np
 
 class BSC203(BSC):
@@ -22,7 +22,45 @@ class BSC203(BSC):
     :param swap_limit_switches: Swap "forward" and "reverse" limit switch values.
     """
     def __init__(self, serial_port=None, vid=None, pid=None, manufacturer=None, product=None, serial_number="70", location=None, home=False, invert_direction_logic=False, swap_limit_switches=True):
-         super().__init__(serial_port=serial_port, vid=vid, pid=pid, manufacturer=manufacturer, product=product, serial_number=serial_number, location=location, x=1, home=home, invert_direction_logic=invert_direction_logic, swap_limit_switches=swap_limit_switches)
+        """
+        Initialize base BSC203 stage controller.
+
+        Parameters
+        ----------
+        serial_port : str | None, optional
+            Explicit serial port path, by default None.
+        vid : int | None, optional
+            USB vendor ID matcher, by default None.
+        pid : int | None, optional
+            USB product ID matcher, by default None.
+        manufacturer : str | None, optional
+            Manufacturer matcher, by default None.
+        product : str | None, optional
+            Product matcher, by default None.
+        serial_number : str, optional
+            Device serial matcher, by default ``"70"``.
+        location : str | None, optional
+            USB location matcher, by default None.
+        home : bool, optional
+            Home on startup when True, by default False.
+        invert_direction_logic : bool, optional
+            Invert forward/reverse polarity, by default False.
+        swap_limit_switches : bool, optional
+            Swap limit switch mapping, by default True.
+        """
+        super().__init__(
+            serial_port=serial_port,
+            vid=vid,
+            pid=pid,
+            manufacturer=manufacturer,
+            product=product,
+            serial_number=serial_number,
+            location=location,
+            x=1,
+            home=home,
+            invert_direction_logic=invert_direction_logic,
+            swap_limit_switches=swap_limit_switches,
+        )
 
 class BSC203_HDR50(BSC203):
     """
@@ -51,6 +89,44 @@ class BSC203_HDR50(BSC203):
 
 
     def __init__(self, serial_port=None, vid=None, pid=None, manufacturer=None, product=None, serial_number="70", location=None, home=False, invert_direction_logic=False, swap_limit_switches=True):
+        """
+        Initialize HDR50 rotating-stage controller configuration.
+
+        Parameters
+        ----------
+        serial_port : str | None, optional
+            Explicit serial port path, by default None.
+        vid : int | None, optional
+            USB vendor ID matcher, by default None.
+        pid : int | None, optional
+            USB product ID matcher, by default None.
+        manufacturer : str | None, optional
+            Manufacturer matcher, by default None.
+        product : str | None, optional
+            Product matcher, by default None.
+        serial_number : str, optional
+            Device serial matcher, by default ``"70"``.
+        location : str | None, optional
+            USB location matcher, by default None.
+        home : bool, optional
+            Home on startup when True, by default False.
+        invert_direction_logic : bool, optional
+            Invert forward/reverse polarity, by default False.
+        swap_limit_switches : bool, optional
+            Swap limit switch mapping, by default True.
+        """
+        self._init_kwargs = dict(
+            serial_port=serial_port,
+            vid=vid,
+            pid=pid,
+            manufacturer=manufacturer,
+            product=product,
+            serial_number=serial_number,
+            location=location,
+            home=home,
+            invert_direction_logic=invert_direction_logic,
+            swap_limit_switches=swap_limit_switches,
+        )
         self.inst = inst.BSC203_HDR50
         self.logger = bsl_logger(self.inst)
         self. __curr_step = None
@@ -69,8 +145,51 @@ class BSC203_HDR50(BSC203):
 
 
     def __del__(self, *args, **kwargs) -> None:
-        self.close()
+        try:
+            self.close()
+        except Exception:
+            pass
         return None
+
+    def reconnect(self, rehome: bool = True) -> bool:
+        """
+        Recover stage control and optionally perform homing.
+
+        Parameters
+        ----------
+        rehome : bool, optional
+            Perform homing after recovery, by default True.
+
+        Returns
+        -------
+        bool
+            True when recovery succeeds.
+        """
+        try:
+            if rehome:
+                self.home()
+            else:
+                self._blocker()
+            return True
+        except Exception as exc:
+            self.logger.error(f"Failed to recover BSC203 HDR50: {type(exc)}")
+            return False
+
+    def reset_stage(self, rehome: bool = True) -> bool:
+        """
+        Reset stage motion state by re-homing when requested.
+
+        Parameters
+        ----------
+        rehome : bool, optional
+            Re-home stage to zero reference, by default True.
+
+        Returns
+        -------
+        bool
+            True when reset succeeds.
+        """
+        return self.reconnect(rehome=rehome)
     
     def _home(self, bay=0, channel=0):
         """
@@ -194,5 +313,11 @@ class BSC203_HDR50(BSC203):
             self.step(doable_step-self.__curr_step)
         return self._blocker()
 
-
-
+    def close(self) -> None:
+        """
+        Close BSC203 controller safely.
+        """
+        try:
+            super().close()
+        except Exception:
+            pass

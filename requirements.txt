@@ -29,5 +29,9 @@ pycolorname>=0.1.0
 # ZMQ communication (for MantisCam)
 pyzmq>=22.0.0
 
+# Gmail Workspace OAuth alerts (device monitor GUI)
+google-auth>=2.22.0
+google-auth-oauthlib>=1.2.0
+
 # Note: MantisCam is an external optional dependency that should be
 # installed separately if MantisCam instrument support is needed

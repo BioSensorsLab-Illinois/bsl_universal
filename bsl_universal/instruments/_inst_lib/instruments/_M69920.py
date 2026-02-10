@@ -12,14 +12,36 @@ import enum, time
 #   Lamp Life: 1000 Hours
 
 class M69920:
+    CONNECT_RETRY_COUNT = 3
+    CONNECT_RETRY_DELAY_SEC = 0.5
+
     class SUPPLY_MODE(enum.Enum):
         CURRENT_MODE = 1
         POWER_MODE = 0
 
     def __init__(self, device_sn="", *, mode=SUPPLY_MODE.POWER_MODE, lim_current:int=50, lim_power:int=1200, default_power:int=1000, force_reset:bool=False) -> None:
+        """
+        Initialize and connect an M69920 lamp power supply.
+
+        Parameters
+        ----------
+        device_sn : str, optional
+            Optional serial selector, by default ``""``.
+        mode : SUPPLY_MODE, optional
+            Startup control mode, by default ``SUPPLY_MODE.POWER_MODE``.
+        lim_current : int, optional
+            Current limit in amps, by default ``50``.
+        lim_power : int, optional
+            Power limit in watts, by default ``1200``.
+        default_power : int, optional
+            Startup power setpoint in watts, by default ``1000``.
+        force_reset : bool, optional
+            Force reinitialization even if running state looks valid, by default False.
+        """
         self.target_device_sn = device_sn
         self.inst = inst.M69920
         self.device_id = ""
+        self.serial = None
         self.logger = bsl_logger(self.inst)
         self.logger.info(f"Initiating bsl_instrument - M69920({device_sn})...")
         if self._serial_connect():
@@ -36,21 +58,99 @@ class M69920:
         pass
 
     def __del__(self, *args, **kwargs) -> None:
-        self.close()
+        try:
+            self.close()
+        except Exception:
+            pass
         return None
 
     def _serial_connect(self) -> bool:
-        try:
-            self.serial = bsl_serial(inst.M69920, self.target_device_sn)
-        except Exception as e:
-            self.logger.error(f"{type(e)}")
-            
-        if self.serial.serial_port is None:
+        """
+        Connect to M69920 serial interface with bounded retries.
+
+        Returns
+        -------
+        bool
+            True when connection succeeds.
+        """
+        self.serial = None
+        last_error = None
+        for attempt in range(1, self.CONNECT_RETRY_COUNT + 1):
+            try:
+                candidate = bsl_serial(inst.M69920, self.target_device_sn)
+                if candidate is None or getattr(candidate, "serial_port", None) is None:
+                    raise bsl_type.DeviceConnectionFailed("No serial communication port found.")
+                if not candidate.serial_port.is_open:
+                    raise bsl_type.DeviceConnectionFailed("Serial port is not open.")
+                self.serial = candidate
+                self.device_id = getattr(candidate, "device_id", "")
+                return True
+            except Exception as exc:
+                last_error = exc
+                self.logger.warning(
+                    f"Connection attempt {attempt}/{self.CONNECT_RETRY_COUNT} failed: {type(exc)}"
+                )
+                time.sleep(self.CONNECT_RETRY_DELAY_SEC)
+        self.logger.error(f"Unable to connect M69920 after retries: {repr(last_error)}")
+        return False
+
+    def reconnect(self, *, force_reset: bool = False) -> bool:
+        """
+        Reconnect to M69920 and optionally force a power-supply reset flow.
+
+        Parameters
+        ----------
+        force_reset : bool, optional
+            Force reinitialization of preset limits and default power, by default False.
+
+        Returns
+        -------
+        bool
+            True when reconnection and optional reinit succeed.
+        """
+        self.close()
+        if not self._serial_connect():
             return False
-        return self.serial.serial_port.is_open
+        self.__init_lamp(force_reset=force_reset)
+        return True
+
+    def reset_supply(self, force_reset: bool = True) -> bool:
+        """
+        Reset and reinitialize power-supply control parameters.
+
+        Parameters
+        ----------
+        force_reset : bool, optional
+            Force parameter reset even when current power looks valid,
+            by default True.
+
+        Returns
+        -------
+        bool
+            True when reset sequence succeeds.
+        """
+        try:
+            self.__init_lamp(force_reset=force_reset)
+            return True
+        except Exception as exc:
+            self.logger.error(f"Failed to reset M69920 supply: {type(exc)}")
+            return False
 
 
-    def serial_command(self, msg) -> int:
+    def serial_command(self, msg) -> bytes:
+        """
+        Send a raw command and return raw response bytes.
+
+        Parameters
+        ----------
+        msg : str
+            Command string.
+
+        Returns
+        -------
+        bytes
+            Raw response payload.
+        """
         time.sleep(0.05)
         self.serial.flush_read_buffer()
         self.serial.writeline(msg)
@@ -60,6 +160,19 @@ class M69920:
     
 
     def serial_query(self, msg) -> float:
+        """
+        Send a query command and parse numeric response.
+
+        Parameters
+        ----------
+        msg : str
+            Query command string.
+
+        Returns
+        -------
+        float
+            Parsed numeric value.
+        """
         time.sleep(0.05)
         self.serial.flush_read_buffer()
         self.serial.writeline(msg)
@@ -167,6 +280,19 @@ class M69920:
 
 
     def lamp_ON(self, retry:int=3) -> int:
+        """
+        Turn on lamp ignition with retry flow.
+
+        Parameters
+        ----------
+        retry : int, optional
+            Maximum ignition attempts, by default ``3``.
+
+        Returns
+        -------
+        int
+            ``0`` when ignition succeeds.
+        """
         count = 0
         self.logger.debug("Truing ON the Arc Lamp.")
         
@@ -187,6 +313,19 @@ class M69920:
     
     
     def lamp_OFF(self, timeout_sec:int=45) -> int:
+        """
+        Turn off lamp output and wait for confirmation.
+
+        Parameters
+        ----------
+        timeout_sec : int, optional
+            Timeout in seconds, by default ``45``.
+
+        Returns
+        -------
+        int
+            ``0`` when shutdown succeeds.
+        """
         start = time.time()
         self.logger.debug("Truing OFF the Arc Lamp.")
 
@@ -202,10 +341,26 @@ class M69920:
         return 0
 
     def is_lamp_ON(self) -> bool:
+        """
+        Query lamp ignition state.
+
+        Returns
+        -------
+        bool
+            True when lamp is on.
+        """
         self.__STB_query()
         return self.__is_lamp_ON
     
     def is_front_panel_locked(self) -> bool:
+        """
+        Query front-panel lock state.
+
+        Returns
+        -------
+        bool
+            True when panel is locked.
+        """
         self.__STB_query()
         return self.__frontpanel_lock
     
@@ -247,6 +402,14 @@ class M69920:
         return 0
 
     def lock_front_panel(self) -> int:
+        """
+        Lock front-panel controls.
+
+        Returns
+        -------
+        int
+            ``0`` when lock is applied.
+        """
         # Set COMM=1 to lock front panel access
         self.logger.debug(f"Locking Arc Lamp frontpanel.")
         self.serial_command('COMM=1')
@@ -258,6 +421,14 @@ class M69920:
         return 0
 
     def unlock_front_panel(self) -> int:
+        """
+        Unlock front-panel controls.
+
+        Returns
+        -------
+        int
+            ``0`` when lock is released.
+        """
         # Set COMM=0 to unlock front panel access
         self.logger.debug(f"Releasing Arc Lamp frontpanel.")
         self.serial_command('COMM=0')
@@ -270,26 +441,58 @@ class M69920:
 
 # For this Xe UV Enhanced lamp, the current setting of 43.5 is required for operation.
     def set_lamp_current(self, current:float = 43.5) -> int:
+        """
+        Set current-mode lamp setpoint.
+
+        Parameters
+        ----------
+        current : float, optional
+            Target current in amps, by default ``43.5``.
+
+        Returns
+        -------
+        int
+            ``0`` when setpoint update succeeds.
+        """
         self.logger.debug(f"Setting Arc Lamp current to {current:.1f}A.")
         # Check if current power supply mode is current mode
         if self.get_lamp_mode() != self.SUPPLY_MODE.CURRENT_MODE:
             self.logger.error(f"FAILED to set lamp current, power supply is in POWER_MODE!")
             raise bsl_type.DeviceInconsistentError
         # Check if the desired current is smaller than current limits
-        if current >= self.current_limit:
-            self.logger.error(f"FAILED to set lamp current to {current:.1f} since current limit is set to {self.current_limit:.1f}!")
+        current_limit = float(self.get_current_limit())
+        if current >= current_limit:
+            self.logger.error(
+                f"FAILED to set lamp current to {current:.1f} since current limit is set to {current_limit:.1f}!"
+            )
             raise bsl_type.DeviceInconsistentError
             
         msg = f'A-PRESET={current:.1f}'
         self.serial_command(msg)
 
-        if self.get_current_limit() != current:
-            self.logger.error(f"FAILED to set lamp current to {current:.1f} with read back current {self.preset_current:.1f}!")
+        readback_current = float(self.get_preset_current())
+        if readback_current != float(current):
+            self.logger.error(
+                f"FAILED to set lamp current to {current:.1f} with read back current {readback_current:.1f}!"
+            )
             raise bsl_type.DeviceInconsistentError
-        self.logger.info(f"Lamp current set to {self.preset_current:.1f}A")    
-        pass
+        self.logger.info(f"Lamp current set to {readback_current:.1f}A")
+        return 0
     
     def set_lamp_power(self, power:int) -> int:
+        """
+        Set power-mode lamp setpoint.
+
+        Parameters
+        ----------
+        power : int
+            Target power in watts.
+
+        Returns
+        -------
+        int
+            ``0`` when setpoint update succeeds.
+        """
         self.logger.debug(f"Setting Arc Lamp power to {power:04d}W.")
         # Check if current power supply mode is current mode
         if self.get_lamp_mode() != self.SUPPLY_MODE.POWER_MODE:
@@ -310,10 +513,26 @@ class M69920:
     
 
     def set_lamp_current_limit(self, lim_I=50) -> int:
+        """
+        Set current limit for current-mode control.
+
+        Parameters
+        ----------
+        lim_I : float, optional
+            Current limit in amps, by default ``50``.
+
+        Returns
+        -------
+        int
+            ``0`` when limit update succeeds.
+        """
         self.logger.debug(f"Setting Arc Lamp current limit to {lim_I:.1f}A.")
         # Check if the desired current is smaller than current limits
-        if lim_I <= self.get_preset_current():
-            self.logger.error(f"FAILED to set lamp current_limit to {lim_I:.1f} since current limit is smaller than preset_current {self.preset_current:.1f}!")
+        preset_current = float(self.get_preset_current())
+        if lim_I <= preset_current:
+            self.logger.error(
+                f"FAILED to set lamp current_limit to {lim_I:.1f} since current limit is smaller than preset_current {preset_current:.1f}!"
+            )
             raise bsl_type.DeviceInconsistentError
             
         msg = f'A-LIM={lim_I:.1f}'
@@ -327,6 +546,19 @@ class M69920:
 
 
     def set_lamp_power_limit(self, lim_P=1200) -> int:
+        """
+        Set power limit for power-mode control.
+
+        Parameters
+        ----------
+        lim_P : int, optional
+            Power limit in watts, by default ``1200``.
+
+        Returns
+        -------
+        int
+            ``0`` when limit update succeeds.
+        """
         self.logger.debug(f"Setting Arc Lamp power limit to {int(lim_P):4d}W.")
         # Check if the desired current is smaller than current limits
         if lim_P <= self.get_preset_power():
@@ -344,41 +576,105 @@ class M69920:
 
 
     def get_current_current(self) -> float:
+        """
+        Read actual output current.
+
+        Returns
+        -------
+        float
+            Current in amps.
+        """
         # Request current reading from the power supply.
         resp = self.serial_query('AMPS?')
         return resp
 
     def get_current_voltage(self) -> float:
+        """
+        Read actual output voltage.
+
+        Returns
+        -------
+        float
+            Voltage in volts.
+        """
         # Request current reading from the power supply.
         resp = self.serial_query('VOLTS?')
         return resp
 
     def get_current_power(self) -> int:
+        """
+        Read actual output power.
+
+        Returns
+        -------
+        int
+            Power in watts.
+        """
         # Request current reading from the power supply.
         resp = self.serial_query('WATTS?')
         return resp
 
     def get_lamp_hours(self) -> int:
+        """
+        Read accumulated lamp runtime hours.
+
+        Returns
+        -------
+        int
+            Lamp runtime in hours.
+        """
         # Request current reading from the power supply.
         resp = self.serial_query('LAMP HRS?')
         return resp
     
     def get_preset_current(self) -> float:
+        """
+        Read configured current setpoint.
+
+        Returns
+        -------
+        float
+            Setpoint current in amps.
+        """
         # Request current reading from the power supply.
         resp = self.serial_query('A-PRESET?')
         return resp
 
     def get_preset_power(self) -> int:
+        """
+        Read configured power setpoint.
+
+        Returns
+        -------
+        int
+            Setpoint power in watts.
+        """
         # Request current reading from the power supply.
         resp = self.serial_query('P-PRESET?')
         return resp
 
     def get_current_limit(self) -> float:
+        """
+        Read configured current limit.
+
+        Returns
+        -------
+        float
+            Current limit in amps.
+        """
         # Request current reading from the power supply.
         resp = self.serial_query('A-LIM?')
         return resp
 
     def get_power_limit(self) -> int:
+        """
+        Read configured power limit.
+
+        Returns
+        -------
+        int
+            Power limit in watts.
+        """
         # Request current reading from the power supply.
         resp = self.serial_query('P-LIM?')
         return resp
@@ -387,14 +683,32 @@ class M69920:
         pass
     
     def lamp_shut_down(self) -> int:
+        """
+        Execute safe lamp shutdown sequence.
+
+        Returns
+        -------
+        int
+            ``0`` when shutdown sequence completes.
+        """
         self.lamp_OFF()
         self.unlock_front_panel()
         return 0
 
     def close(self) -> None:
-        if self.serial is not None:
-            self.lamp_shut_down()
-            self.serial.close()
-            del self.serial
+        """
+        Close M69920 communication resources safely.
+        """
+        serial_obj = getattr(self, "serial", None)
+        if serial_obj is not None:
+            try:
+                self.lamp_shut_down()
+            except Exception:
+                pass
+            try:
+                serial_obj.close()
+            except Exception:
+                pass
+            self.serial = None
         self.logger.info(f"CLOSED - Arc lamp's power supply.\n\n\n")
         pass

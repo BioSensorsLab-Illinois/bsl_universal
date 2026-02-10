@@ -128,3 +128,20 @@ dmypy.json
 # Pyre type checker
 .pyre/
 .DS_Store
+
+# IDE and editor
+.idea/
+.fleet/
+*.code-workspace
+.vscode/test_script/
+
+# Additional Python/cache tooling
+.ruff_cache/
+.pytype/
+
+# Build/test/temp outputs
+*.tmp
+*.bak
+*.swp
+*.swo
+*.orig

@@ -2,11 +2,22 @@ from ..interfaces._bsl_visa import _bsl_visa as bsl_visa
 from ..headers._bsl_inst_info import _bsl_inst_info_list as inst
 from ..headers._bsl_logger import _bsl_logger as bsl_logger
 from ..headers._bsl_type import _bsl_type as bsl_type
-import time, sys
+import time
 import numpy as np
 
 class PM400:
+    CONNECT_RETRY_COUNT = 3
+    CONNECT_RETRY_DELAY_SEC = 0.5
+
     def __init__(self, device_sn:str="") -> None:
+        """
+        Initialize and connect a PM400 power meter.
+
+        Parameters
+        ----------
+        device_sn : str, optional
+            Optional serial selector, by default ``""``.
+        """
         self.inst = inst.PM400
         self.device_id=""
         self.logger = bsl_logger(self.inst)
@@ -21,20 +32,85 @@ class PM400:
         pass
 
     def __del__(self, *args, **kwargs) -> None:
-        self.close()
+        try:
+            self.close()
+        except Exception:
+            pass
         return None
 
     def _com_connect(self, device_sn:str) -> bool:
+        """
+        Connect to PM400 with bounded retries.
+
+        Parameters
+        ----------
+        device_sn : str
+            Optional serial selector.
+
+        Returns
+        -------
+        bool
+            True when connection succeeds.
+        """
+        self._com = None
+        last_error = None
+        for attempt in range(1, self.CONNECT_RETRY_COUNT + 1):
+            try:
+                candidate = bsl_visa(inst.PM400, device_sn)
+                if candidate is None or getattr(candidate, "com_port", None) is None:
+                    raise bsl_type.DeviceConnectionFailed("No VISA communication port found.")
+                self._com = candidate
+                self.device_id = getattr(candidate, "device_id", "")
+                return True
+            except Exception as exc:
+                last_error = exc
+                self.logger.warning(
+                    f"Connection attempt {attempt}/{self.CONNECT_RETRY_COUNT} failed: {type(exc)}"
+                )
+                time.sleep(self.CONNECT_RETRY_DELAY_SEC)
+        self.logger.error(f"Unable to connect PM400 after retries: {repr(last_error)}")
+        return False
+
+    def reconnect(self, device_sn: str = "") -> bool:
+        """
+        Reconnect to the PM400 controller.
+
+        Parameters
+        ----------
+        device_sn : str, optional
+            Optional serial selector, by default ``""``.
+
+        Returns
+        -------
+        bool
+            True when reconnection succeeds.
+        """
+        self.close()
+        return self._com_connect(device_sn)
+
+    def reset_meter(self, run_update: bool = True) -> bool:
+        """
+        Reset PM400 and optionally refresh cached readbacks.
+
+        Parameters
+        ----------
+        run_update : bool, optional
+            Refresh key readings after reset, by default True.
+
+        Returns
+        -------
+        bool
+            True when reset sequence succeeds.
+        """
         try:
-            self._com = bsl_visa(inst.PM400, device_sn)
-        except Exception as e:
-            self.logger.error(f"{type(e)}")
-            sys.exit(-1)
-        if self._com is None:
-            if self._com.com_port is None:
-                return False
-        self.device_id = self._com.device_id
-        return True
+            self._com.write("*RST")
+            time.sleep(0.2)
+            if run_update:
+                self.run_update_power_meter()
+            return True
+        except Exception as exc:
+            self.logger.error(f"Failed to reset PM400: {type(exc)}")
+            return False
 
     def run_update_power_meter(self) -> None:
         """
@@ -414,8 +490,15 @@ class PM400:
 
 
     def close(self) -> None:
-        if self._com is not None:
-            self._com.close()
-            del self._com
+        """
+        Close PM400 communication resources safely.
+        """
+        com_obj = getattr(self, "_com", None)
+        if com_obj is not None:
+            try:
+                com_obj.close()
+            except Exception:
+                pass
+            self._com = None
         self.logger.info(f"CLOSED - Thorlab PM400 Power Meter \"{self.device_id}\"\n\n\n")
         pass

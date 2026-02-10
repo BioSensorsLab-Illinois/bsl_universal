@@ -3,10 +3,21 @@ from ..headers._bsl_inst_info import _bsl_inst_info_list as inst
 from ..headers._bsl_logger import _bsl_logger as bsl_logger
 from ..headers._bsl_type import _bsl_type as bsl_type
 
-import time, sys
+import time
 
 class DC2200:
+    CONNECT_RETRY_COUNT = 3
+    CONNECT_RETRY_DELAY_SEC = 0.5
+
     def __init__(self, device_sn:str="") -> None:
+        """
+        Initialize and connect a DC2200 LED controller.
+
+        Parameters
+        ----------
+        device_sn : str, optional
+            Optional serial selector, by default ``""``.
+        """
         self.inst = inst.DC2200
         self.device_id=""
         self.logger = bsl_logger(self.inst)
@@ -21,20 +32,66 @@ class DC2200:
         pass
 
     def __del__(self, *args, **kwargs) -> None:
-        self.close()
+        try:
+            self.close()
+        except Exception:
+            pass
         return None
 
     def _com_connect(self, device_sn:str) -> bool:
-        try:
-            self._com = bsl_visa(inst.DC2200, device_sn)
-        except Exception as e:
-            self.logger.error(f"{type(e)}")
-            sys.exit(-1)
-        if self._com is None:
-            if self._com.com_port is None:
-                return False
-        self.device_id = self._com.device_id
-        return True
+        """
+        Connect to DC2200 with bounded retries.
+
+        Parameters
+        ----------
+        device_sn : str
+            Optional serial selector.
+
+        Returns
+        -------
+        bool
+            True when connection succeeds.
+        """
+        self._com = None
+        last_error = None
+        for attempt in range(1, self.CONNECT_RETRY_COUNT + 1):
+            try:
+                candidate = bsl_visa(inst.DC2200, device_sn)
+                if candidate is None or getattr(candidate, "com_port", None) is None:
+                    raise bsl_type.DeviceConnectionFailed("No VISA communication port found.")
+                self._com = candidate
+                self.device_id = getattr(candidate, "device_id", "")
+                return True
+            except Exception as exc:
+                last_error = exc
+                self.logger.warning(
+                    f"Connection attempt {attempt}/{self.CONNECT_RETRY_COUNT} failed: {type(exc)}"
+                )
+                time.sleep(self.CONNECT_RETRY_DELAY_SEC)
+        self.logger.error(f"Unable to connect DC2200 after retries: {repr(last_error)}")
+        return False
+
+    def reconnect(self, device_sn: str = "", reset_controller: bool = False) -> bool:
+        """
+        Reconnect to the DC2200 controller.
+
+        Parameters
+        ----------
+        device_sn : str, optional
+            Optional serial selector, by default ``""``.
+        reset_controller : bool, optional
+            Reset controller state after reconnect, by default False.
+
+        Returns
+        -------
+        bool
+            True when reconnection succeeds.
+        """
+        self.close()
+        connected = self._com_connect(device_sn)
+        if connected and reset_controller:
+            self._reset_controller()
+        return connected
 
 
     def _reset_controller(self) -> None:
@@ -43,6 +100,22 @@ class DC2200:
         """
         self._com.write("*RST")
         self.logger.info(f"LED Controller is Reset to initial states.")
+
+    def reset_controller(self) -> bool:
+        """
+        Reset LED controller to default state.
+
+        Returns
+        -------
+        bool
+            True when reset succeeds.
+        """
+        try:
+            self._reset_controller()
+            return True
+        except Exception as exc:
+            self.logger.error(f"Failed to reset DC2200: {type(exc)}")
+            return False
 
 
     def get_screen_brightness(self) -> int:
@@ -238,7 +311,7 @@ class DC2200:
         self.logger.info(f"LED2's output current set to {current_mA}mA.")
         self._com.write(f"SOURCE2:PWM:FREQency {frequency}.")
         self.logger.info(f"LED2's PWM frequency set to {frequency}Hz.")
-        self._com.write(f"SOURCE1:PWM:DCYCle {duty_cycle}")
+        self._com.write(f"SOURCE2:PWM:DCYCle {duty_cycle}")
         self.logger.info(f"LED2's PWM Duty cycle set to {duty_cycle:.2f}%.")
         self._com.write(f"SOURCE2:PWM:COUNt {count}")
         self.logger.info(f"LED2's PWM pulse count set to {count}.")
@@ -259,8 +332,15 @@ class DC2200:
 
 
     def close(self) -> None:
-        if self._com is not None:
-            self._com.close()
-            del self._com
+        """
+        Close DC2200 communication resources safely.
+        """
+        com_obj = getattr(self, "_com", None)
+        if com_obj is not None:
+            try:
+                com_obj.close()
+            except Exception:
+                pass
+            self._com = None
         self.logger.info(f"CLOSED - Thorlab DC2200 LED Controller \"{self.device_id}\"\n\n\n")
         pass

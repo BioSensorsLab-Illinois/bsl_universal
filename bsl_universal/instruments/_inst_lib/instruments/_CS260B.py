@@ -2,10 +2,21 @@ from ..interfaces._bsl_visa import _bsl_visa as bsl_visa
 from ..headers._bsl_inst_info import _bsl_inst_info_list as inst
 from ..headers._bsl_logger import _bsl_logger as bsl_logger
 from ..headers._bsl_type import _bsl_type as bsl_type
-import time, sys
+import time
 
 class CS260B:   
+    CONNECT_RETRY_COUNT = 3
+    CONNECT_RETRY_DELAY_SEC = 0.75
+
     def __init__(self, device_sn:str="") -> None:
+        """
+        Initialize and connect a CS260B monochromator.
+
+        Parameters
+        ----------
+        device_sn : str, optional
+            Optional serial selector, by default ``""``.
+        """
         self.inst = inst.CS260B
         self.device_id="" 
         self.logger = bsl_logger(self.inst)
@@ -21,21 +32,92 @@ class CS260B:
 
     
     def __del__(self, *args, **kwargs) -> None:
-        self.close()
+        try:
+            self.close()
+        except Exception:
+            pass
         return None
 
 
     def __visa_connect(self, device_sn:str="") -> int:
+        """
+        Connect to CS260B via VISA with bounded retries.
+
+        Parameters
+        ----------
+        device_sn : str, optional
+            Optional serial selector.
+
+        Returns
+        -------
+        int
+            ``0`` on success and ``-1`` on failure.
+        """
+        self._com = None
+        last_error = None
+        for attempt in range(1, self.CONNECT_RETRY_COUNT + 1):
+            try:
+                candidate = bsl_visa(inst.CS260B, device_sn)
+                if candidate is None or getattr(candidate, "com_port", None) is None:
+                    raise bsl_type.DeviceConnectionFailed("No VISA communication port found.")
+                self._com = candidate
+                self.device_id = getattr(candidate, "device_id", "")
+                return 0
+            except Exception as exc:
+                last_error = exc
+                self.logger.warning(
+                    f"Connection attempt {attempt}/{self.CONNECT_RETRY_COUNT} failed: {type(exc)}"
+                )
+                time.sleep(self.CONNECT_RETRY_DELAY_SEC)
+        self.logger.error(f"Unable to connect CS260B after retries: {repr(last_error)}")
+        return -1
+
+    def reconnect(self, device_sn: str = "", run_init: bool = True) -> bool:
+        """
+        Reconnect to CS260B and optionally rerun startup initialization.
+
+        Parameters
+        ----------
+        device_sn : str, optional
+            Optional serial selector, by default ``""``.
+        run_init : bool, optional
+            Re-run equipment init sequence after reconnect, by default True.
+
+        Returns
+        -------
+        bool
+            True when reconnection succeeds.
+        """
+        self.close()
+        if self.__visa_connect(device_sn) != 0:
+            return False
+        if run_init:
+            self.__equipmnet_init()
+        return True
+
+    def reset_controller(self, run_init: bool = True) -> bool:
+        """
+        Recover CS260B to a known ready state.
+
+        Parameters
+        ----------
+        run_init : bool, optional
+            Run full startup sequence after homing, by default True.
+
+        Returns
+        -------
+        bool
+            True when reset/recovery succeeds.
+        """
         try:
-            self._com = bsl_visa(inst.CS260B, device_sn)
-        except Exception as e:
-            self.logger.error(f"{type(e)}")
-            sys.exit(-1)
-        if self._com is None:
-            if self._com.com_port is None:
-                return -1
-        self.device_id = self._com.device_id
-        return 0
+            self.get_idle(blocking=True)
+            self.__set_gethome()
+            if run_init:
+                self.__equipmnet_init()
+            return True
+        except Exception as exc:
+            self.logger.error(f"Failed to reset CS260B: {type(exc)}")
+            return False
 
 
     def __equipmnet_init(self):
@@ -169,7 +251,7 @@ class CS260B:
             0 if success, -1 if fail
         """
         if wavelength < 0 or wavelength > 2500:
-            bsl_logger.error("wavelength out of range!")
+            self.logger.error("wavelength out of range!")
             return -1
 
         if auto_grating:
@@ -215,7 +297,7 @@ class CS260B:
             0 if success, -1 if fail
         """
         if grating < 1 or grating > 4:
-            bsl_logger.error("grating out of range!")
+            self.logger.error("grating out of range!")
             return -1
 
         #Check current grating setting before setting new grating:
@@ -255,7 +337,7 @@ class CS260B:
             0 if success, -1 if fail
         """
         if filter < 1 or filter > 6:
-            bsl_logger.error("filter out of range!")
+            self.logger.error("filter out of range!")
             return -1
         
         if self.get_filter() == filter:
@@ -493,7 +575,7 @@ class CS260B:
         if err_code == '0' or err_code == "501":
             return 0
 
-        while (err_code != 0 and count < 11):
+        while (err_code != '0' and count < 11):
             count += 1
             self.logger.error(f"Device Error with error code:{err_code}; error msg: {err_msg}.")
             (err_code, err_msg) = self._com.query("SYSTEM:ERROR?").split(',')
@@ -501,10 +583,20 @@ class CS260B:
     
 
     def close(self) -> None:
-        if self._com is not None:
-            self.close_shutter()
-            self._com.close()
-            del self._com
+        """
+        Close CS260B communication resources safely.
+        """
+        com_obj = getattr(self, "_com", None)
+        if com_obj is not None:
+            try:
+                self.close_shutter()
+            except Exception:
+                pass
+            try:
+                com_obj.close()
+            except Exception:
+                pass
+            self._com = None
         self.logger.info(f"CLOSED - \"{self.device_id}\"\n\n\n")
         pass
     

@@ -2,11 +2,26 @@ from ..headers._bsl_inst_info import _bsl_inst_info_list as inst
 from ..headers._bsl_logger import _bsl_logger as bsl_logger
 from ..headers._bsl_type import _bsl_type as bsl_type
 import numpy
-import seabreeze.spectrometers as sb
+try:
+    import seabreeze.spectrometers as sb
+except Exception:
+    sb = None
 from numpy.typing import NDArray
+import time
 
 class HR4000CG:
+    CONNECT_RETRY_COUNT = 3
+    CONNECT_RETRY_DELAY_SEC = 0.5
+
     def __init__(self, device_sn:str=None) -> None:
+        """
+        Initialize and connect an HR4000CG spectrometer.
+
+        Parameters
+        ----------
+        device_sn : str | None, optional
+            Optional serial selector, by default None.
+        """
         self.inst = inst.HR4000CG
         self.target_device_sn = device_sn
         self.device_id=""
@@ -22,7 +37,10 @@ class HR4000CG:
         return None
 
     def __del__(self, *args, **kwargs) -> None:
-        self.close()
+        try:
+            self.close()
+        except Exception:
+            pass
         return None
 
     def __connect_spectrometer(self) -> None:
@@ -33,29 +51,80 @@ class HR4000CG:
         Raises:
             self.DeviceConnectionFailed: Failed to connect to spectrometer.
         """
+        if sb is None:
+            self.logger.error("seabreeze is not installed; HR4000CG communication unavailable.")
+            raise bsl_type.DeviceConnectionFailed
         self.spec = None
-        if len(sb.list_devices()) == 0:
+        devices = sb.list_devices()
+        if len(devices) == 0:
             self.logger.error(f"Device not found on communication bus.\n\n\n")
             raise bsl_type.DeviceConnectionFailed
         
-        self.logger.trace(f"Devices found on bus: {str(sb.list_devices())}")
-        try:
-            if self.target_device_sn is (None or ""):
-                # with sb.Spectrometer.from_first_available() as spec_device:
-                self.spec = sb.Spectrometer.from_first_available()
-            elif self.target_device_sn in str(sb.list_devices()):
-                # with sb.Spectrometer.from_serial_number(self.target_device_sn) as spec_device:
-                self.spec = sb.Spectrometer.from_serial_number(self.target_device_sn)
-            else:
-                self.logger.error(f"FAILED - Device[s] found on the bus, but failed to find requested device with s/n: \"{self.target_device_sn}\".\n\n\n")
-                raise bsl_type.DeviceConnectionFailed
-        except:
-            self.logger.error(f"FAILED - Device[s] found on the communication bus, but failed to make connection.\n\n\n")
-            raise bsl_type.DeviceConnectionFailed
+        self.logger.trace(f"Devices found on bus: {str(devices)}")
+        last_error = None
+        for attempt in range(1, self.CONNECT_RETRY_COUNT + 1):
+            try:
+                if self.target_device_sn in (None, ""):
+                    self.spec = sb.Spectrometer.from_first_available()
+                elif self.target_device_sn in str(devices):
+                    self.spec = sb.Spectrometer.from_serial_number(self.target_device_sn)
+                else:
+                    self.logger.error(
+                        f"FAILED - Device[s] found on the bus, but failed to find requested device with s/n: \"{self.target_device_sn}\".\n\n\n"
+                    )
+                    raise bsl_type.DeviceConnectionFailed
+                break
+            except Exception as exc:
+                last_error = exc
+                self.spec = None
+                self.logger.warning(
+                    f"Connect attempt {attempt}/{self.CONNECT_RETRY_COUNT} failed for HR4000CG."
+                )
+                time.sleep(self.CONNECT_RETRY_DELAY_SEC)
+
+        if self.spec is None:
+            self.logger.error(
+                f"FAILED - Device[s] found on the communication bus, but failed to make connection.\n\n\n"
+            )
+            raise bsl_type.DeviceConnectionFailed from last_error
             
         self.device_id = self.spec.serial_number
         self.device_model = self.spec.model
         return None
+
+    def reconnect(self, device_sn: str | None = None) -> bool:
+        """
+        Reconnect to spectrometer.
+
+        Parameters
+        ----------
+        device_sn : str | None, optional
+            Optional serial selector override, by default None.
+
+        Returns
+        -------
+        bool
+            True when reconnection succeeds.
+        """
+        if device_sn is not None:
+            self.target_device_sn = device_sn
+        self.close()
+        try:
+            self.__connect_spectrometer()
+            return self.spec is not None
+        except Exception:
+            return False
+
+    def reset_connection(self) -> bool:
+        """
+        Reset spectrometer connection using current selector.
+
+        Returns
+        -------
+        bool
+            True when reconnection succeeds.
+        """
+        return self.reconnect(device_sn=self.target_device_sn)
 
     def get_wavelength(self) -> NDArray[numpy.float64]:
         """
@@ -165,12 +234,15 @@ class HR4000CG:
         return self.spec.pixels
 
     def close(self) -> None:
+        """
+        Close spectrometer resources safely.
+        """
         try:
-            if self.spec is not None:
-                self.spec.close()
-                del self.spec
-        except:
+            spec_obj = getattr(self, "spec", None)
+            if spec_obj is not None:
+                spec_obj.close()
+        except Exception:
             pass
+        self.spec = None
         self.logger.success(f"CLOSED - OceanOptics HR4000CG Spectrometer \"{self.device_id}\"\n\n\n")
         return None
-

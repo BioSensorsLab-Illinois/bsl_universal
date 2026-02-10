@@ -5,6 +5,9 @@ from ..headers._bsl_type import _bsl_type as bsl_type
 import time, re, enum
 
 class USB_520:
+    CONNECT_RETRY_COUNT = 3
+    CONNECT_RETRY_DELAY_SEC = 0.5
+
     class USB_520_SN(enum.Enum):
         CH1 = '1066656'; CH2 = '1066657'; CH3 = '1066658'; CH4 = '1066659'
 
@@ -32,7 +35,12 @@ class USB_520:
             0 if successful, otherwise raise an exception.
         """
         if "CH" in device_sn:
-            device_sn = self.USB_520_SN[device_sn].value
+            try:
+                device_sn = self.USB_520_SN[device_sn].value
+            except KeyError as exc:
+                raise bsl_type.DeviceConnectionFailed(
+                    f"Unknown USB_520 channel alias: {device_sn}"
+                ) from exc
             
         self._target_device_sn = device_sn
         self.inst = inst.USB_520
@@ -64,7 +72,10 @@ class USB_520:
         raise bsl_type.DeviceConnectionFailed
 
     def __del__(self, *args, **kwargs) -> None:
-        self.close()
+        try:
+            self.close()
+        except Exception:
+            pass
         return None
     
     
@@ -76,14 +87,78 @@ class USB_520:
     
 
     def _serial_connect(self) -> bool:
-        try:
-            self.serial = bsl_serial(inst.USB_520, self._target_device_sn)
-        except Exception as e:
-            self.logger.error(f"{type(e)}")
-            
-        if self.serial.serial_port is None:
+        """
+        Connect to USB-520 serial interface with bounded retries.
+
+        Returns
+        -------
+        bool
+            True when connection succeeds.
+        """
+        self.serial = None
+        last_error = None
+        for attempt in range(1, self.CONNECT_RETRY_COUNT + 1):
+            try:
+                candidate = bsl_serial(inst.USB_520, self._target_device_sn)
+                if candidate is None or getattr(candidate, "serial_port", None) is None:
+                    raise bsl_type.DeviceConnectionFailed("No serial communication port found.")
+                if not candidate.serial_port.is_open:
+                    raise bsl_type.DeviceConnectionFailed("Serial port is not open.")
+                self.serial = candidate
+                return True
+            except Exception as exc:
+                last_error = exc
+                self.logger.warning(
+                    f"Connection attempt {attempt}/{self.CONNECT_RETRY_COUNT} failed: {type(exc)}"
+                )
+                time.sleep(self.CONNECT_RETRY_DELAY_SEC)
+        self.logger.error(f"Unable to connect USB_520 after retries: {repr(last_error)}")
+        return False
+
+    def reconnect(self, device_sn: str = "", tear_on_startup: bool = False) -> bool:
+        """
+        Reconnect to USB-520 device.
+
+        Parameters
+        ----------
+        device_sn : str, optional
+            Optional serial selector override, by default ``""``.
+        tear_on_startup : bool, optional
+            Run tare calibration after reconnect, by default False.
+
+        Returns
+        -------
+        bool
+            True when reconnection succeeds.
+        """
+        if device_sn:
+            self._target_device_sn = device_sn
+        self.close()
+        if not self._serial_connect():
             return False
-        return self.serial.serial_port.is_open
+        self.__system_init(tear_on_startup=tear_on_startup)
+        return True
+
+    def reset_tear_calibration(self, average_count: int = 10) -> bool:
+        """
+        Re-run tare calibration from fresh measurements.
+
+        Parameters
+        ----------
+        average_count : int, optional
+            Number of samples for tare averaging, by default 10.
+
+        Returns
+        -------
+        bool
+            True when calibration succeeds.
+        """
+        try:
+            self.set_tear_calibration(average_count=average_count)
+            return True
+        except Exception as exc:
+            self.logger.error(f"Failed to reset USB_520 tare calibration: {type(exc)}")
+            return False
     
 
     def __extract_float(self, msg:str) -> float:
@@ -166,8 +241,15 @@ class USB_520:
     
 
     def close(self) -> None:
-        if self.serial is not None:
-            self.serial.close()
-            del self.serial
+        """
+        Close USB-520 communication resources safely.
+        """
+        serial_obj = getattr(self, "serial", None)
+        if serial_obj is not None:
+            try:
+                serial_obj.close()
+            except Exception:
+                pass
+            self.serial = None
         self.logger.success(f"CLOSED - Futek USB DAC.\n\n\n")
         pass

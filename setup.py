@@ -23,7 +23,9 @@ setup(
           'tqdm>=4.62.3',
           'h5py>=3.0.0',
           'opencv-python>=4.5.0',
-          'pyzmq>=22.0.0'
+          'pyzmq>=22.0.0',
+          'google-auth>=2.22.0',
+          'google-auth-oauthlib>=1.2.0'
       ],
   classifiers=[
     'Development Status :: 3 - Alpha',      # Chose either "3 - Alpha", "4 - Beta" or "5 - Production/Stable" as the current state of your package

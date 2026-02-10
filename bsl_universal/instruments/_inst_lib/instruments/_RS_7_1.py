@@ -10,10 +10,21 @@ from typing import Union
 from numpy.typing import NDArray
 
 from loguru import logger
-from pycolorname.pantone.pantonepaint import PantonePaint
-from skimage import color
+
+try:
+    from pycolorname.pantone.pantonepaint import PantonePaint
+except Exception:
+    PantonePaint = None
+
+try:
+    from skimage import color
+except Exception:
+    color = None
 
 class RS_7_1:
+    CONNECT_RETRY_COUNT = 3
+    CONNECT_RETRY_DELAY_SEC = 1.0
+
     class _SYSTEM_UNIT(enum.Enum):
         RADIOMETRIC = 0; PHOTOMETRIC = 1; PERCENTAGE = 2
     class _STM_MODE(enum.Enum):
@@ -31,12 +42,22 @@ class RS_7_1:
     class MACBECH_COLOR(enum.Enum):
         CIExy = list([(0.4336, 0.3787), (0.4187, 0.3749), (0.2757, 0.2996), (0.3688, 0.4501), (0.3016, 0.2871), (0.2856, 0.3905), (0.5291, 0.4081), (0.2335, 0.2157), (0.5002, 0.3295), (0.3316, 0.2544), (0.3986, 0.5002), (0.4960, 0.4426), (0.2042, 0.1676), (0.3262, 0.5040), (0.5734, 0.3284), (0.4693, 0.4730), (0.4175, 0.2702), (0.2146, 0.3028), (0.3486, 0.3625)])
     def __init__(self, device_sn="", power_on_test:bool = True) -> None:
+        """
+        Initialize and connect an RS-7-1 tunable light source.
+
+        Parameters
+        ----------
+        device_sn : str, optional
+            Optional serial selector, by default ``""``.
+        power_on_test : bool, optional
+            Run startup integrity tests, by default True.
+        """
         self._target_device_sn = device_sn
         self.inst = inst.RS_7_1
         self.device_id = ""
         self.logger = bsl_logger(self.inst)
-        self.logger.info(f"Initiating bsl_instrument - M69920({device_sn})...")
-        self._pantone_keys = PantonePaint().keys()
+        self.logger.info(f"Initiating bsl_instrument - RS_7_1({device_sn})...")
+        self._pantone_keys = list(PantonePaint().keys()) if PantonePaint is not None else []
         self._com = self._serial_connect()
 
         if self._com is not None:
@@ -50,15 +71,87 @@ class RS_7_1:
         raise bsl_type.DeviceConnectionFailed
 
     def __del__(self, *args, **kwargs) -> None:
-        self.close()
+        try:
+            self.close()
+        except Exception:
+            pass
         return None
 
     def _serial_connect(self) -> bsl_serial:
+        """
+        Connect to RS-7-1 serial interface.
+
+        Returns
+        -------
+        bsl_serial | None
+            Serial interface instance when successful.
+        """
+        com_port = None
         try:
             com_port = bsl_serial(inst.RS_7_1, self._target_device_sn)
         except Exception as e:
             self.logger.error(f"{type(e)}")
         return com_port
+
+    def reconnect(self, device_sn: str = "", power_on_test: bool = False) -> bool:
+        """
+        Reconnect to RS-7-1 and optionally re-run startup tests.
+
+        Parameters
+        ----------
+        device_sn : str, optional
+            Optional serial selector override, by default ``""``.
+        power_on_test : bool, optional
+            Run integrity/basic assurance tests after reconnect, by default False.
+
+        Returns
+        -------
+        bool
+            True when reconnection succeeds.
+        """
+        if device_sn:
+            self._target_device_sn = device_sn
+        self.close()
+        last_error = None
+        for attempt in range(1, self.CONNECT_RETRY_COUNT + 1):
+            try:
+                self._com = self._serial_connect()
+                if self._com is None or getattr(self._com, "serial_port", None) is None:
+                    raise bsl_type.DeviceConnectionFailed("No serial communication port found.")
+                self.device_id = self._com_query("USN")
+                self.logger.device_id = self.device_id
+                self._system_init(power_on_test=power_on_test)
+                return True
+            except Exception as exc:
+                last_error = exc
+                self.logger.warning(
+                    f"Reconnect attempt {attempt}/{self.CONNECT_RETRY_COUNT} failed: {type(exc)}"
+                )
+                time.sleep(self.CONNECT_RETRY_DELAY_SEC)
+        self.logger.error(f"Unable to reconnect RS_7_1: {repr(last_error)}")
+        return False
+
+    def reset_system(self, power_on_test: bool = False) -> bool:
+        """
+        Reboot RS-7-1 and reinitialize runtime settings.
+
+        Parameters
+        ----------
+        power_on_test : bool, optional
+            Run startup tests after reboot, by default False.
+
+        Returns
+        -------
+        bool
+            True when reset succeeds.
+        """
+        try:
+            self._system_restart()
+            self._system_init(power_on_test=power_on_test)
+            return True
+        except Exception as exc:
+            self.logger.error(f"Failed to reset RS_7_1: {type(exc)}")
+            return False
 
     #checked
     def _system_restart(self) -> None:
@@ -73,9 +166,29 @@ class RS_7_1:
 
     def _system_init(self, power_on_test: bool=True) -> None:
         if power_on_test:
-            self._system_restart()
-            self._run_integrity_check()
-            self._run_basic_assurance_test()
+            try:
+                self._system_restart()
+            except Exception as exc:
+                self.logger.warning(
+                    "RS_7_1 restart during power-on test failed (continuing): {}",
+                    exc,
+                )
+
+            try:
+                self._run_integrity_check()
+            except Exception as exc:
+                self.logger.warning(
+                    "RS_7_1 integrity check failed (warning-only, continuing): {}",
+                    exc,
+                )
+
+            try:
+                self._run_basic_assurance_test()
+            except Exception as exc:
+                self.logger.warning(
+                    "RS_7_1 basic assurance test failed (warning-only, continuing): {}",
+                    exc,
+                )
         self._set_wavelength_range(360,1100)
         self.set_standard_observer_angle(self.OBSERVER_ANGLE.DEG_2)
         self._set_spectrum_transfer_format(self._STM_MODE.ASCII_COMMA)
@@ -119,7 +232,7 @@ class RS_7_1:
             Faild Test : `bsl_type.DeviceInconsistentError`
                 System failed its power-on integrity test.
         """
-        resp = self._com_cmd('BAT',5)
+        self._com_cmd('BAT',5)
         if self._com_cmd('ICK',5) != 0:
             self.logger.error("failed power-on basic assurance test!")
             raise bsl_type.DeviceOperationError
@@ -326,7 +439,7 @@ class RS_7_1:
             (Defaults to 0)
             Percentage close, i.e. to fully open the iris, set to 0.
         """
-        if (percentage<=0 and percentage >= 100):
+        if percentage < 0 or percentage > 100:
             self.logger.error("Cannot set percentage smaller than 0 or greater than 100!")
             raise bsl_type.DeviceOperationError
         msg = f"IRI{percentage}"
@@ -813,6 +926,9 @@ class RS_7_1:
         if ((r>255 or r<0) or (g>255 or g<0) or (b>255 or b<0)):
             self.logger.error("Provided RGB values are out of range!")
             raise bsl_type.DeviceOperationError
+        if color is None:
+            self.logger.error("scikit-image is required for RGB to CIExy conversion.")
+            raise bsl_type.DeviceOperationError
         CIExyz = color.rgb2xyz([r/255.0,g/255.0,b/255.0])
         X=CIExyz[0]
         Y=CIExyz[1]
@@ -869,11 +985,14 @@ class RS_7_1:
         RMS_Error : `float`
             Root-Mean-Square error for the fitted specturm.
         """
+        if PantonePaint is None:
+            self.logger.error("pycolorname is required for Pantone color lookup.")
+            raise bsl_type.DeviceOperationError
         key = [s for s in self._pantone_keys if color_name.lower() in s.lower()]
         if len(key) == 0:
-            self.logger.error(f"Color \"{color}\" is not found in Pantone Color set!")
+            self.logger.error(f"Color \"{color_name}\" is not found in Pantone Color set!")
             raise bsl_type.DeviceOperationError
-        if key[0] != color:
+        if key[0].lower() != color_name.lower():
             self.logger.warning(f"No exact match found, assuming color \"{key[0]}\"")
         (r, g, b) = (PantonePaint()[key[0]])
         err = self.set_spectrum_rgb(r,g,b,power,power_unit,irr_distance_mm)
@@ -1103,6 +1222,14 @@ class RS_7_1:
         return spectrum
 
     def get_distinct_led_channel_id(self) -> 'tuple(list[int], list[float])':
+        """
+        Return unique LED channel IDs with nonzero center wavelengths.
+
+        Returns
+        -------
+        tuple[list[int], list[float]]
+            Distinct ``(channel_ids, wavelengths_nm)`` pairs.
+        """
         led_chan_id = []
         wavelengths = []
         ids = np.asarray(self.LED_CHANNELS.LEN_CHANS_NO_WHITE.value)
@@ -1114,11 +1241,24 @@ class RS_7_1:
         return (led_chan_id, wavelengths)
 
     def close(self) -> None:
-        if self._com is not None:
-            self.set_power_all(0)
-            self.set_iris_position(100)
-            self._com.close()
-            del self._com
+        """
+        Close RS-7-1 communication resources safely.
+        """
+        com_obj = getattr(self, "_com", None)
+        if com_obj is not None:
+            try:
+                self.set_power_all(0)
+            except Exception:
+                pass
+            try:
+                self.set_iris_position(100)
+            except Exception:
+                pass
+            try:
+                com_obj.close()
+            except Exception:
+                pass
+            self._com = None
         self.logger.success(f"CLOSED - Tunable Light Source.\n\n\n")
         pass
 
