@@ -6,6 +6,13 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build-and-check:
     name: "${{ matrix.platform.id }} | py${{ matrix.python-version }}"
@@ -95,6 +102,8 @@ jobs:
     name: "unified wheel | py3-none-any"
     runs-on: ubuntu-22.04
     needs: build-and-check
+    outputs:
+      release_version: ${{ steps.bump.outputs.release_version }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -110,14 +119,88 @@ jobs:
       - name: Install wheel build tooling
         run: python -m pip install build twine
 
-      - name: Build unified wheel
-        run: python -m build --wheel
-
-      - name: Verify wheel tag
+      - name: Auto increment package version (major=2)
+        id: bump
         run: |
           python - <<'PY'
+          import json
+          import os
+          import re
+          import urllib.request
+          from pathlib import Path
+
+          package_name = "bsl-universal"
+          forced_major = 2
+          setup_path = Path("setup.py")
+          text = setup_path.read_text(encoding="utf-8")
+
+          local_match = re.search(r"version\s*=\s*['\"]([^'\"]+)['\"]", text)
+          if not local_match:
+              raise SystemExit("Unable to parse version from setup.py")
+
+          local_version = local_match.group(1).strip()
+          local_parts = local_version.split(".")
+          local_minor = 0
+          local_patch = 0
+          if len(local_parts) == 3 and local_parts[0].isdigit() and local_parts[1].isdigit() and local_parts[2].isdigit():
+              if int(local_parts[0]) == forced_major:
+                  local_minor = int(local_parts[1])
+                  local_patch = int(local_parts[2])
+
+          releases = []
+          try:
+              with urllib.request.urlopen(f"https://pypi.org/pypi/{package_name}/json", timeout=20) as resp:
+                  payload = json.load(resp)
+              for version in payload.get("releases", {}):
+                  m = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)", str(version).strip())
+                  if not m:
+                      continue
+                  major, minor, patch = map(int, m.groups())
+                  if major == forced_major:
+                      releases.append((minor, patch))
+          except Exception:
+              # Network lookup failure should not block CI release assembly.
+              releases = []
+
+          if releases:
+              minor, patch = max(releases)
+              patch += 1
+              if patch > 99:
+                  patch = 0
+                  minor += 1
+          else:
+              minor, patch = local_minor, local_patch
+
+          release_version = f"{forced_major}.{minor}.{patch}"
+
+          updated_text, count = re.subn(
+              r"version\s*=\s*['\"][^'\"]+['\"]",
+              f"version = '{release_version}'",
+              text,
+              count=1,
+          )
+          if count != 1:
+              raise SystemExit("Failed to rewrite version in setup.py")
+
+          setup_path.write_text(updated_text, encoding="utf-8")
+          print(f"Resolved release version: {release_version}")
+
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
+              fh.write(f"release_version={release_version}\\n")
+          PY
+
+      - name: Build unified distributions
+        run: python -m build --sdist --wheel
+
+      - name: Verify wheel tag
+        env:
+          RELEASE_VERSION: ${{ steps.bump.outputs.release_version }}
+        run: |
+          python - <<'PY'
+          import os
           import pathlib
 
+          release_version = os.environ["RELEASE_VERSION"]
           wheels = list(pathlib.Path("dist").glob("*.whl"))
           if len(wheels) != 1:
               raise SystemExit(f"Expected exactly 1 wheel, found {len(wheels)}: {[w.name for w in wheels]}")
@@ -125,16 +208,54 @@ jobs:
           wheel_name = wheels[0].name
           if "py3-none-any" not in wheel_name:
               raise SystemExit(f"Expected unified wheel tag 'py3-none-any', got: {wheel_name}")
+          if f"-{release_version}-" not in wheel_name:
+              raise SystemExit(f"Wheel does not contain expected version {release_version}: {wheel_name}")
+
+          sdists = list(pathlib.Path("dist").glob("*.tar.gz"))
+          if len(sdists) != 1:
+              raise SystemExit(f"Expected exactly 1 sdist, found {len(sdists)}: {[s.name for s in sdists]}")
+          sdist_name = sdists[0].name
+          if f"-{release_version}.tar.gz" not in sdist_name:
+              raise SystemExit(f"sdist does not contain expected version {release_version}: {sdist_name}")
 
           print(f"Unified wheel verified: {wheel_name}")
+          print(f"sdist verified: {sdist_name}")
           PY
 
       - name: Validate distribution metadata
-        run: python -m twine check dist/*.whl
+        run: python -m twine check dist/*
 
-      - name: Upload unified wheel artifact
+      - name: Upload distribution artifact
         uses: actions/upload-artifact@v4
         with:
-          name: bsl-universal-unified-wheel
-          path: dist/*.whl
+          name: bsl-universal-dist
+          path: dist/*
           if-no-files-found: error
+
+  publish-pypi:
+    name: "publish to pypi"
+    runs-on: ubuntu-22.04
+    needs: [unified-wheel]
+    if: >-
+      github.event_name == 'push' &&
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    concurrency:
+      group: pypi-publish
+      cancel-in-progress: false
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Download distribution artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: bsl-universal-dist
+          path: dist
+
+      - name: Show release version
+        run: echo "Publishing version ${{ needs.unified-wheel.outputs.release_version }} to PyPI"
+
+      - name: Publish distributions to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist
