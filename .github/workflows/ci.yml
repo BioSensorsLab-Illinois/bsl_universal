@@ -40,11 +40,59 @@ jobs:
       - name: Upgrade pip
         run: python -m pip install --upgrade pip
 
-      - name: Install build tooling
-        run: python -m pip install build
-
-      - name: Build source and wheel distributions
-        run: python -m build --sdist --wheel
+      - name: Install package
+        run: python -m pip install .
 
       - name: Compile package
         run: python -m compileall -q bsl_universal
+
+      - name: Import smoke test
+        run: python -c "import bsl_universal; print(bsl_universal.__name__)"
+
+  unified-wheel:
+    name: "unified wheel | py3-none-any"
+    runs-on: ubuntu-22.04
+    needs: build-and-check
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.8"
+
+      - name: Upgrade pip
+        run: python -m pip install --upgrade pip
+
+      - name: Install wheel build tooling
+        run: python -m pip install build twine
+
+      - name: Build unified wheel
+        run: python -m build --wheel
+
+      - name: Verify wheel tag
+        run: |
+          python - <<'PY'
+          import pathlib
+
+          wheels = list(pathlib.Path("dist").glob("*.whl"))
+          if len(wheels) != 1:
+              raise SystemExit(f"Expected exactly 1 wheel, found {len(wheels)}: {[w.name for w in wheels]}")
+
+          wheel_name = wheels[0].name
+          if "py3-none-any" not in wheel_name:
+              raise SystemExit(f"Expected unified wheel tag 'py3-none-any', got: {wheel_name}")
+
+          print(f"Unified wheel verified: {wheel_name}")
+          PY
+
+      - name: Validate distribution metadata
+        run: python -m twine check dist/*.whl
+
+      - name: Upload unified wheel artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bsl-universal-unified-wheel
+          path: dist/*.whl
+          if-no-files-found: error
