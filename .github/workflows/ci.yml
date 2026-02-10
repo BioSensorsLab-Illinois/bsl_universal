@@ -40,8 +40,22 @@ jobs:
       - name: Upgrade pip
         run: python -m pip install --upgrade pip
 
+      - name: Install Linux system dependencies
+        if: startsWith(matrix.platform.runner, 'ubuntu')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libhdf5-dev pkg-config
+
+      - name: Configure HDF5 environment (Linux)
+        if: startsWith(matrix.platform.runner, 'ubuntu')
+        run: |
+          HDF5_DIR="/usr/lib/$(dpkg-architecture -qDEB_HOST_MULTIARCH)/hdf5/serial"
+          echo "HDF5_DIR=${HDF5_DIR}" >> "$GITHUB_ENV"
+          echo "PKG_CONFIG_PATH=${HDF5_DIR}/pkgconfig:${HDF5_DIR}/lib/pkgconfig:${PKG_CONFIG_PATH:-}" >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=${HDF5_DIR}:${LD_LIBRARY_PATH:-}" >> "$GITHUB_ENV"
+
       - name: Install package
-        run: python -m pip install .
+        run: python -m pip install --prefer-binary .
 
       - name: Compile package
         run: python -m compileall -q bsl_universal
