@@ -175,14 +175,49 @@ class RS_7_1:
         """
         self.logger.info("Rebooting System!")
         self._com.writeline('RST')
-        time.sleep(5)
+        time.sleep(8)
         self.logger.info("System Rebooted!")
         return None
+
+    def _wait_ready_after_restart(self, timeout_sec: float = 8.0) -> bool:
+        """
+        Probe command channel after reboot until device responds normally.
+
+        Parameters
+        ----------
+        timeout_sec : float, optional
+            Max wait duration in seconds, by default ``8.0``.
+
+        Returns
+        -------
+        bool
+            True when a plausible serial response is observed.
+        """
+        deadline = time.monotonic() + max(0.0, float(timeout_sec))
+        expected_sn = str(self.device_id or "").strip()
+        while time.monotonic() < deadline:
+            try:
+                resp = str(self._com_query("USN", timeout=0.8)).strip()
+            except Exception:
+                resp = ""
+
+            if resp:
+                if expected_sn and expected_sn in resp:
+                    return True
+                # Typical RS-7 serial starts with HX.
+                if "HX" in resp.upper():
+                    return True
+            time.sleep(0.2)
+        return False
 
     def _system_init(self, power_on_test: bool=True) -> None:
         if power_on_test:
             try:
                 self._system_restart()
+                if not self._wait_ready_after_restart(timeout_sec=8.0):
+                    self.logger.warning(
+                        "RS_7_1 reboot sync timeout (continuing with warning-only startup checks)."
+                    )
             except Exception as exc:
                 self.logger.warning(
                     "RS_7_1 restart during power-on test failed (continuing): {}",
@@ -386,17 +421,36 @@ class RS_7_1:
     def _com_query(self, msg, timeout:float = 1.0) -> str:
         self._com.flush_read_buffer()
         self._com.write(msg+'\r\n')
-        resp = self._readline_nonempty(timeout)
-        return resp
+
+        deadline = time.monotonic() + max(0.0, float(timeout))
+        last_nonempty = ""
+        while True:
+            resp = self._com.readline().strip("\n\r")
+            if resp != "":
+                # Query commands should return payload; skip stray "Ok" acks/noise.
+                if resp.lower() != "ok":
+                    return resp
+                last_nonempty = resp
+            if time.monotonic() >= deadline:
+                return last_nonempty
 
     def _com_cmd(self, msg, timeout:float = 1.0) -> int:
         self._com.flush_read_buffer()
         self._com.write(msg+'\r\n')
-        resp = self._readline_nonempty(timeout)
-        if resp != "Ok":
-            self.logger.error(f"message from device: \"{resp}\"")
-            raise bsl_type.DeviceOperationError
-        return 0
+
+        deadline = time.monotonic() + max(0.0, float(timeout))
+        last_nonempty = ""
+        while True:
+            resp = self._com.readline().strip("\n\r")
+            if resp != "":
+                if resp == "Ok":
+                    return 0
+                # RS-7 can emit transient status text around reboot/tests.
+                # Keep reading until timeout in case an "Ok" arrives next.
+                last_nonempty = resp
+            if time.monotonic() >= deadline:
+                self.logger.error(f"message from device: \"{last_nonempty}\"")
+                raise bsl_type.DeviceOperationError
 
     def _readline_nonempty(self, timeout: float = 1.0) -> str:
         """
