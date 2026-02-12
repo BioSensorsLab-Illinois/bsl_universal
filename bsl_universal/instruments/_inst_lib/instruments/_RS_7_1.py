@@ -62,11 +62,21 @@ class RS_7_1:
 
         if self._com is not None:
             if self._com.serial_port is not None:
-                self.device_id = self._com_query('USN')
-                self.logger.device_id = self.device_id
-                self._system_init(power_on_test = power_on_test)
-                self.logger.success(f"READY - Tunable Light Source.\n\n\n")
-                return None
+                try:
+                    # Use a safer runtime read timeout for RS-7 command/response traffic.
+                    self._com.set_serial_timeout(0.5)
+                    self.device_id = self._com_query('USN')
+                    self.logger.device_id = self.device_id
+                    self._system_init(power_on_test = power_on_test)
+                    self.logger.success(f"READY - Tunable Light Source.\n\n\n")
+                    return None
+                except Exception:
+                    # Ensure serial handle is released immediately on init failure.
+                    try:
+                        self.close()
+                    except Exception:
+                        pass
+                    raise
         self.logger.error(f"FAILED to connect to RS_7_1 Tunable Light Source!\n\n\n")
         raise bsl_type.DeviceConnectionFailed
 
@@ -118,12 +128,17 @@ class RS_7_1:
                 self._com = self._serial_connect()
                 if self._com is None or getattr(self._com, "serial_port", None) is None:
                     raise bsl_type.DeviceConnectionFailed("No serial communication port found.")
+                self._com.set_serial_timeout(0.5)
                 self.device_id = self._com_query("USN")
                 self.logger.device_id = self.device_id
                 self._system_init(power_on_test=power_on_test)
                 return True
             except Exception as exc:
                 last_error = exc
+                try:
+                    self.close()
+                except Exception:
+                    pass
                 self.logger.warning(
                     f"Reconnect attempt {attempt}/{self.CONNECT_RETRY_COUNT} failed: {type(exc)}"
                 )
@@ -368,29 +383,42 @@ class RS_7_1:
         intensity = a/ ( (wav**5) * (np.exp(b) - 1.0) )
         return intensity
 
-    def _com_query(self, msg, timeout:float = 0.5) -> str:
+    def _com_query(self, msg, timeout:float = 1.0) -> str:
         self._com.flush_read_buffer()
         self._com.write(msg+'\r\n')
-        resp = self._com.readline()
-        if resp == "":
-            return self._com.readline()
-        else:
-            return resp
+        resp = self._readline_nonempty(timeout)
+        return resp
 
-    def _com_cmd(self, msg, timeout:float = 0.5) -> int:
+    def _com_cmd(self, msg, timeout:float = 1.0) -> int:
         self._com.flush_read_buffer()
         self._com.write(msg+'\r\n')
-        resp = self._com.readline()
-        if resp == "":
-            resp = self._com.readline()
-            if resp != "Ok":
-                self.logger.error(f"message from device: \"{resp}\"")
-                raise bsl_type.DeviceOperationError
-            else:
-                return 0
-        elif resp != "Ok":
+        resp = self._readline_nonempty(timeout)
+        if resp != "Ok":
             self.logger.error(f"message from device: \"{resp}\"")
             raise bsl_type.DeviceOperationError
+        return 0
+
+    def _readline_nonempty(self, timeout: float = 1.0) -> str:
+        """
+        Read lines until a non-empty payload is received or timeout expires.
+
+        Parameters
+        ----------
+        timeout : float, optional
+            Maximum wait time in seconds, by default ``1.0``.
+
+        Returns
+        -------
+        str
+            First non-empty response line, or ``""`` when timeout expires.
+        """
+        deadline = time.monotonic() + max(0.0, float(timeout))
+        while True:
+            resp = self._com.readline()
+            if resp != "":
+                return resp
+            if time.monotonic() >= deadline:
+                return ""
 
     #checked
     def find_closest_chan(self, wavelength:float) -> 'tuple([list[int], float, float])':
