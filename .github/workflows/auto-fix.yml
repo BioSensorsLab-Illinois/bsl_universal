@@ -1,0 +1,303 @@
+name: CI Autofix
+
+# Triggered when `.github/workflows/ci.yml` finishes with conclusion=failure.
+# Two modes:
+#
+#   FIRST-ATTEMPT MODE — failing branch is `main`/`master` (or a tag/dispatch ref).
+#     Creates a new `autofix/ci-<RUN_ID>` branch with the proposed patch,
+#     opens a PR for human review.
+#
+#   CONTINUATION MODE — failing branch is already an `autofix/*` branch
+#     (i.e. the prior autofix PR's CI just failed). Pushes ANOTHER commit
+#     to the existing branch. The PR's CI then re-fires (because `ci.yml`
+#     already triggers on all PRs); on failure this workflow runs again.
+#     Loops up to MAX_ITERATIONS commits per PR.
+#
+# When MAX_ITERATIONS is hit, comments on the PR + adds an
+# `autofix-exhausted` label and exits cleanly. PR stays open for review.
+#
+# No-ops gracefully if ANTHROPIC_API_KEY isn't set. To activate:
+#   gh secret set ANTHROPIC_API_KEY --body "$ANTHROPIC_API_KEY"
+#
+# Adapted from the MantisCamUnified L-AUTOFIX pattern; library-specific
+# scope (no PyInstaller / packaging scripts — fix surface is setup.py +
+# the workflow + the package imports).
+#
+# Design: .agent/runs/ci-autofix-loop/ExecPlan.md
+# Repo policy: see Agent.md (delete test scripts, no user-facing README).
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: read
+  issues: write
+
+env:
+  MAX_ITERATIONS: "10"
+
+jobs:
+  attempt-fix:
+    name: Attempt Claude-API patch
+    runs-on: ubuntu-latest
+    # Only act on real failures, and skip fork PRs (we can't push there).
+    if: >
+      github.event.workflow_run.conclusion == 'failure' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    steps:
+      - name: Check ANTHROPIC_API_KEY presence
+        id: check-key
+        env:
+          KEY_PRESENT: ${{ secrets.ANTHROPIC_API_KEY != '' }}
+        run: |
+          set -euo pipefail
+          if [ "$KEY_PRESENT" != "true" ]; then
+            cat <<'EOF'
+          =====================================================================
+          ANTHROPIC_API_KEY secret is not configured for this repo.
+          Skipping autofix.
+
+          To activate, run (with the key in your shell env):
+
+              gh secret set ANTHROPIC_API_KEY \
+                --repo BioSensorsLab-Illinois/bsl_universal \
+                --body "$ANTHROPIC_API_KEY"
+
+          See .agent/runs/ci-autofix-loop/Status.md for setup details.
+          =====================================================================
+          EOF
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Determine mode (first-attempt vs continuation)
+        id: mode
+        if: steps.check-key.outputs.skip != 'true'
+        env:
+          PARENT_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          PARENT_RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          set -euo pipefail
+          if [[ "${PARENT_HEAD_BRANCH:-}" == autofix/* ]]; then
+            echo "mode=continue" >> "$GITHUB_OUTPUT"
+            echo "branch=$PARENT_HEAD_BRANCH" >> "$GITHUB_OUTPUT"
+            echo "::notice::Continuation mode on branch $PARENT_HEAD_BRANCH"
+          else
+            echo "mode=first" >> "$GITHUB_OUTPUT"
+            echo "branch=autofix/ci-$PARENT_RUN_ID" >> "$GITHUB_OUTPUT"
+            echo "::notice::First-attempt mode → new branch autofix/ci-$PARENT_RUN_ID"
+          fi
+
+      - name: Checkout failing ref
+        if: steps.check-key.outputs.skip != 'true'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Iteration check (continuation only — cap at MAX_ITERATIONS)
+        id: iter-check
+        if: steps.check-key.outputs.skip != 'true' && steps.mode.outputs.mode == 'continue'
+        env:
+          BRANCH: ${{ steps.mode.outputs.branch }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main:refs/remotes/origin/main 2>/dev/null \
+            || git fetch --no-tags origin master:refs/remotes/origin/master 2>/dev/null \
+            || true
+          BASE=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/@@' || echo "origin/main")
+          count=$(git log "$BASE..HEAD" --author='claude-autofix' --oneline | wc -l | tr -d ' ')
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+          echo "::notice::Iteration count on $BRANCH: $count / $MAX_ITERATIONS"
+          if [ "$count" -ge "$MAX_ITERATIONS" ]; then
+            echo "max_reached=true"  >> "$GITHUB_OUTPUT"
+          else
+            echo "max_reached=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Comment + label PR (max iterations exhausted)
+        if: |
+          steps.check-key.outputs.skip != 'true' &&
+          steps.mode.outputs.mode == 'continue' &&
+          steps.iter-check.outputs.max_reached == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ steps.mode.outputs.branch }}
+          PARENT_RUN_ID: ${{ github.event.workflow_run.id }}
+          ITER_COUNT: ${{ steps.iter-check.outputs.count }}
+        run: |
+          set -euo pipefail
+          PR_NUM=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number // ""')
+          if [ -z "$PR_NUM" ]; then
+            echo "::warning::No open PR found for $BRANCH; cannot post exhaustion comment."
+            exit 0
+          fi
+          gh label create autofix-exhausted \
+            --description "Autofix loop hit the iteration cap; needs human" \
+            --color B60205 2>/dev/null || true
+          gh pr edit "$PR_NUM" --add-label autofix-exhausted || true
+          gh pr comment "$PR_NUM" --body "$(cat <<EOF
+          :x: **Autofix iteration cap reached** ($ITER_COUNT / $MAX_ITERATIONS commits, CI still failing).
+
+          Latest failed run: https://github.com/${{ github.repository }}/actions/runs/$PARENT_RUN_ID
+
+          Claude could not converge on a passing patch within the cap. Manual intervention needed.
+          EOF
+          )"
+
+      - name: Configure git identity
+        if: |
+          steps.check-key.outputs.skip != 'true' &&
+          (steps.mode.outputs.mode == 'first' || steps.iter-check.outputs.max_reached != 'true')
+        run: |
+          git config user.name "claude-autofix[bot]"
+          git config user.email "claude-autofix-bot@users.noreply.github.com"
+
+      - name: Set up Python
+        if: |
+          steps.check-key.outputs.skip != 'true' &&
+          (steps.mode.outputs.mode == 'first' || steps.iter-check.outputs.max_reached != 'true')
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install anthropic SDK
+        if: |
+          steps.check-key.outputs.skip != 'true' &&
+          (steps.mode.outputs.mode == 'first' || steps.iter-check.outputs.max_reached != 'true')
+        run: pip install --quiet 'anthropic>=0.40.0'
+
+      - name: Download failed run log
+        if: |
+          steps.check-key.outputs.skip != 'true' &&
+          (steps.mode.outputs.mode == 'first' || steps.iter-check.outputs.max_reached != 'true')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/failed-logs
+          gh run view "${{ github.event.workflow_run.id }}" \
+            --repo "${{ github.repository }}" \
+            --log-failed \
+            > /tmp/failed-logs/log.txt 2>&1 || true
+          wc -l /tmp/failed-logs/log.txt || true
+
+      - name: Build prior-attempts summary (continuation only)
+        if: |
+          steps.check-key.outputs.skip != 'true' &&
+          steps.mode.outputs.mode == 'continue' &&
+          steps.iter-check.outputs.max_reached != 'true'
+        run: |
+          set -euo pipefail
+          BASE=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/@@' || echo "origin/main")
+          {
+            echo "Prior autofix attempts on this branch (most recent last):"
+            echo
+            git log "$BASE..HEAD" --author='claude-autofix' \
+              --pretty=format:'--- attempt %h (%ci) ---%n%s%n%n%b%n' \
+              --reverse
+          } > /tmp/prior_attempts.txt
+          head -100 /tmp/prior_attempts.txt
+
+      - name: Run Claude fix attempt
+        if: |
+          steps.check-key.outputs.skip != 'true' &&
+          (steps.mode.outputs.mode == 'first' || steps.iter-check.outputs.max_reached != 'true')
+        id: claude-fix
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PARENT_RUN_ID: ${{ github.event.workflow_run.id }}
+          PARENT_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          PARENT_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          MODE: ${{ steps.mode.outputs.mode }}
+        run: |
+          set -euo pipefail
+          PRIOR_ARG=()
+          if [ "$MODE" = "continue" ] && [ -f /tmp/prior_attempts.txt ]; then
+            PRIOR_ARG=(--prior-attempts-summary /tmp/prior_attempts.txt)
+          fi
+          python3 scripts/ci/claude_fix_attempt.py \
+            --run-id "$PARENT_RUN_ID" \
+            --log-file /tmp/failed-logs/log.txt \
+            --head-sha "$PARENT_HEAD_SHA" \
+            --head-branch "${PARENT_HEAD_BRANCH:-main}" \
+            --mode "$MODE" \
+            "${PRIOR_ARG[@]}" \
+            --output /tmp/fix_result.json
+
+      - name: Open autofix PR (first-attempt mode only)
+        if: |
+          steps.check-key.outputs.skip != 'true' &&
+          steps.mode.outputs.mode == 'first' &&
+          success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PARENT_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          set -euo pipefail
+          BRANCH=$(jq -r '.branch_name'    /tmp/fix_result.json)
+          PR_TITLE=$(jq -r '.pr_title'     /tmp/fix_result.json)
+          jq -r '.commit_message'          /tmp/fix_result.json > /tmp/commit_msg.txt
+          jq -r '.pr_body'                 /tmp/fix_result.json > /tmp/pr_body.md
+          git checkout -b "$BRANCH"
+          jq -r '.modified_files[]' /tmp/fix_result.json | xargs -r git add --
+          git commit -F /tmp/commit_msg.txt
+          git push -u origin "$BRANCH"
+          BASE_BRANCH="${PARENT_HEAD_BRANCH:-main}"
+          gh label create autofix \
+            --description "Auto-generated by Claude autofix workflow" \
+            --color 1D76DB 2>/dev/null || true
+          gh pr create \
+            --title "$PR_TITLE" \
+            --body-file /tmp/pr_body.md \
+            --label autofix \
+            --base "$BASE_BRANCH"
+
+      - name: Push iteration commit to existing PR (continuation mode)
+        if: |
+          steps.check-key.outputs.skip != 'true' &&
+          steps.mode.outputs.mode == 'continue' &&
+          steps.iter-check.outputs.max_reached != 'true' &&
+          success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ steps.mode.outputs.branch }}
+          ITER_PRIOR: ${{ steps.iter-check.outputs.count }}
+          PARENT_RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          set -euo pipefail
+          ITER_NEXT=$((ITER_PRIOR + 1))
+          jq -r '.modified_files[]' /tmp/fix_result.json | xargs -r git add --
+          if git diff --cached --quiet; then
+            echo "::warning::Patch produced no staged changes; ending loop."
+            exit 0
+          fi
+          jq -r '.commit_message' /tmp/fix_result.json > /tmp/commit_msg.txt
+          {
+            echo "[autofix] iteration $ITER_NEXT/$MAX_ITERATIONS — retry after CI failure"
+            echo
+            cat /tmp/commit_msg.txt
+          } > /tmp/commit_msg_iter.txt
+          git commit -F /tmp/commit_msg_iter.txt
+          git push origin "$BRANCH"
+          PR_NUM=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number // ""')
+          if [ -n "$PR_NUM" ]; then
+            CLAUDE_MSG=$(jq -r '.claude_message' /tmp/fix_result.json)
+            FAILED_RUN_URL="https://github.com/${{ github.repository }}/actions/runs/$PARENT_RUN_ID"
+            gh pr comment "$PR_NUM" --body "$(cat <<EOF
+          :arrows_counterclockwise: **Autofix iteration $ITER_NEXT/$MAX_ITERATIONS** pushed.
+
+          Triggered by failed CI run: $FAILED_RUN_URL
+
+          $CLAUDE_MSG
+          EOF
+          )"
+          fi
