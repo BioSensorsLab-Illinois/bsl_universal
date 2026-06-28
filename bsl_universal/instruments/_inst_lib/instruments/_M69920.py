@@ -508,6 +508,7 @@ class M69920:
 
         if self.get_preset_power() != power:
             self.logger.error(f"    FAILED to set lamp power to {power:04d} with read back power {int(self.get_preset_power()):04d}!")
+            raise bsl_type.DeviceInconsistentError
         self.logger.info(f"Lamp power set to {int(self.get_preset_power()):04d}W")       
         return 0
     
@@ -570,6 +571,7 @@ class M69920:
   
         if self.get_power_limit() != lim_P:
             self.logger.error(f"FAILED to set lamp power_limit to {lim_P:04d} with read back power {int(self.get_power_limit()):04d}!")
+            raise bsl_type.DeviceInconsistentError
         self.logger.info(f"Lamp power_limit set to {int(self.get_power_limit()):4d}W")       
         return 0
 

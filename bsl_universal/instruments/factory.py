@@ -20,8 +20,11 @@ class InstrumentFactory:
 
     Notes
     -----
-    The factory retries constructor calls to reduce transient initialization
-    failures on hardware buses and converts ``SystemExit`` into typed exceptions.
+    By default the factory makes a single construction attempt (``retries=0``)
+    because re-running a driver ``__init__`` is unsafe for instruments with
+    non-idempotent hardware side effects (stage homing, LED/lamp power-on). It
+    converts ``SystemExit`` into typed exceptions, and callers may opt in to
+    transient-failure retries by passing ``retries > 0``.
     """
 
     def __init__(self):
@@ -57,7 +60,7 @@ class InstrumentFactory:
         self,
         name: str,
         *args: Any,
-        retries: int = 2,
+        retries: int = 0,
         retry_delay_sec: float = 0.5,
         **kwargs: Any,
     ) -> Any:
@@ -71,7 +74,14 @@ class InstrumentFactory:
         *args : Any
             Positional args for the instrument constructor.
         retries : int, optional
-            Number of constructor retries after the first attempt, by default 2.
+            Number of constructor retries after the first attempt, by default 0.
+
+            Defaults to 0 so construction makes exactly one attempt. Re-running a
+            driver ``__init__`` is unsafe for instruments whose constructors
+            perform non-idempotent hardware side effects (stage homing, LED/lamp
+            power-on, lamp ignition); a blind retry would re-trigger those on a
+            partially initialized device. Callers that know the target driver's
+            constructor is side-effect free may opt in by passing ``retries > 0``.
         retry_delay_sec : float, optional
             Delay between retries in seconds, by default 0.5.
         **kwargs : Any

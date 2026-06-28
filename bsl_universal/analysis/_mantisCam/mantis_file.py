@@ -99,6 +99,12 @@ class mantis_file:
         # If single frame => shape [H,W,C] or [H,W], we do the same logic
         elif (frames_f32.ndim == self._dark_frame.ndim):
             frames_f32 -= self._dark_frame
+        # If a single frame is paired with a per-frame [N,H,W,C] dark volume,
+        # select the matching dark slice via frame_idx (the documented
+        # "exact frame-by-frame matching" case). Without this, broadcasting a
+        # [H,W,C] frame against a [N,H,W,C] dark would wrongly expand to [N,H,W,C].
+        elif (frame_idx is not None) and (self._dark_frame.ndim == frames_f32.ndim + 1):
+            frames_f32 -= self._dark_frame[frame_idx]
         else:
             logger.warning(f"Dark-sub shape mismatch: frames {frames_f32.shape}, dark {self._dark_frame.shape}. Attempting broadcast subtraction.")
             frames_f32 -= self._dark_frame

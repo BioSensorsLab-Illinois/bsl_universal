@@ -198,7 +198,7 @@ class DC2200:
         self.set_LED1_OFF()
         self._com.write("SOURce1:MODe CC")
         self.logger.info(f"LED1's mode set to Constant Current Mode.")
-        self._com.write(f"SOURCE1:CCURENT:CURRENT {(current_mA/1000):.2f}")
+        self._com.write(f"SOURCE1:CCURRENT:CURRENT {(current_mA/1000):.4f}")
         self.logger.info(f"LED1's output current set to {current_mA}mA")
         self.set_LED1_ON()
 
@@ -215,7 +215,7 @@ class DC2200:
         self.set_LED2_OFF()
         self._com.write("SOURce2:MODe CC")
         self.logger.info(f"LED2's mode set to Constant Current Mode.")
-        self._com.write(f"SOURCE2:CCURENT:CURRENT {(current_mA/1000):.2f}")
+        self._com.write(f"SOURCE2:CCURRENT:CURRENT {(current_mA/1000):.4f}")
         self.logger.info(f"LED2's output current set to {current_mA}mA")
         self.set_LED2_ON()
 
@@ -275,9 +275,9 @@ class DC2200:
         self.set_LED1_OFF()
         self._com.write("SOURce1:MODe PWM")
         self.logger.info(f"LED1's mode set to PWM Mode.")
-        self._com.write(f"SOURCE1:PWM:CURRent {(current_mA/1000):.2f}")
+        self._com.write(f"SOURCE1:PWM:CURRent {(current_mA/1000):.4f}")
         self.logger.info(f"LED1's output current set to {current_mA}mA.")
-        self._com.write(f"SOURCE1:PWM:FREQency {frequency}.")
+        self._com.write(f"SOURCE1:PWM:FREQ {frequency}")
         self.logger.info(f"LED1's PWM frequency set to {frequency}Hz.")
         self._com.write(f"SOURCE1:PWM:DCYCle {duty_cycle}")
         self.logger.info(f"LED1's PWM Duty cycle set to {duty_cycle:.2f}%.")
@@ -307,9 +307,9 @@ class DC2200:
         self.set_LED2_OFF()
         self._com.write("SOURce2:MODe PWM")
         self.logger.info(f"LED2's mode set to PWM Mode.")
-        self._com.write(f"SOURCE2:PWM:CURRent {(current_mA/1000):.2f}")
+        self._com.write(f"SOURCE2:PWM:CURRent {(current_mA/1000):.4f}")
         self.logger.info(f"LED2's output current set to {current_mA}mA.")
-        self._com.write(f"SOURCE2:PWM:FREQency {frequency}.")
+        self._com.write(f"SOURCE2:PWM:FREQ {frequency}")
         self.logger.info(f"LED2's PWM frequency set to {frequency}Hz.")
         self._com.write(f"SOURCE2:PWM:DCYCle {duty_cycle}")
         self.logger.info(f"LED2's PWM Duty cycle set to {duty_cycle:.2f}%.")
@@ -337,6 +337,16 @@ class DC2200:
         """
         com_obj = getattr(self, "_com", None)
         if com_obj is not None:
+            # Safety: disable energized LED outputs before releasing the handle
+            # so a high-power LED is not left ON after the resource is gone.
+            try:
+                self.set_LED1_OFF()
+            except Exception:
+                pass
+            try:
+                self.set_LED2_OFF()
+            except Exception:
+                pass
             try:
                 com_obj.close()
             except Exception:

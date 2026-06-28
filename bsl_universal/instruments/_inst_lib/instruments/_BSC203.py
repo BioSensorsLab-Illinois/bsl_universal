@@ -277,6 +277,9 @@ class BSC203_HDR50(BSC203):
         But if the current position is far from home, it will home in crazy mode. 
         Be careful, DON'T touch the stage when you use this--Bill Yang
         """
+        if self.__curr_step is None:
+            self.logger.warning("Open-loop step counter unknown (not homed); performing a full mechanical home.")
+            return self._home(bay, channel)
         stepnum = 800 - self.__curr_step
         if stepnum >= 750:
             self._home()
@@ -310,6 +313,9 @@ class BSC203_HDR50(BSC203):
             self.step(doable_step)
             self.logger.success(f"absolute angle manuver complete, step at {doable_step}, angle at {doable_angle}")
         else:
+            if self.__curr_step is None:
+                self.logger.warning("Open-loop step counter unknown (not homed); homing before relative move.")
+                self.home()
             self.step(doable_step-self.__curr_step)
         return self._blocker()
 

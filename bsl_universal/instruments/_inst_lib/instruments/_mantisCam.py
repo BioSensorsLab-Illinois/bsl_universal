@@ -229,6 +229,25 @@ class MantisCamCtrl:
         self._target_exposure_ms = 50.0
         self.current_exposure_ms = 0.0
 
+        # Saver-side image-correction intent + dark-staleness tracking. These
+        # corrections live in the MantisCamUnified Saver and apply ONLY to the
+        # processed-H5 companion (see set_save_processed_h5). The controller
+        # keeps local intent state because the Saver does not echo these toggles.
+        self._dark_capture_exposure_ms: Optional[float] = None
+        self.dark_correction_stale = False
+        self.dark_correction_enabled = False
+        self.hot_pixel_correction_enabled = False
+        self.flat_field_correction_enabled = False
+        self.save_processed_h5 = False
+
+        # Locally-tracked Saver output targets. The backend does not echo
+        # save_targets, so the controller remembers the last commanded state
+        # (defaults mirror set_save_targets' h5=True/isp=True defaults) to let
+        # set_save_file_type assert the raw "h5" target without clobbering the
+        # independent isp target.
+        self._save_target_h5 = True
+        self._save_target_isp = True
+
         self._last_received_exp_ms: Optional[float] = None
         self._last_raw_meta: Dict[str, Any] = {}
         self._last_isp_meta: Dict[str, Any] = {}
@@ -285,7 +304,9 @@ class MantisCamCtrl:
         -------
         None
         """
-        if self._closed:
+        if getattr(self, "_closed", True):
+            # Guard against a partially-constructed object: if __init__ raised
+            # before _closed was set, __del__ -> close() must not AttributeError.
             return
         self._closed = True
 
@@ -303,9 +324,23 @@ class MantisCamCtrl:
 
         try:
             if self._ctx is not None:
-                self._ctx.term()
+                # Use destroy(linger=0) rather than term(): the production
+                # MantisCam Messenger closes its sockets with the default
+                # (infinite) linger, so a PUB command socket holding
+                # undelivered messages would make term() block forever once the
+                # backend is gone. destroy(linger=0) forces a finite linger on
+                # any socket still open in this context before terminating, so
+                # close()/__del__/atexit cannot hang. In-flight commands may be
+                # dropped, which is acceptable during shutdown.
+                self._ctx.destroy(linger=0)
         except Exception:
             pass
+
+        try:
+            atexit.unregister(self.close)
+        except Exception:
+            pass
+        self._atexit_registered = False
 
         self.cmd = None
         self.vid = None
@@ -548,13 +583,20 @@ class MantisCamCtrl:
         if self._closed:
             return
 
+        if self._ctx is None or self.poller is None:
+            return
+
         messenger_cls = _ExternalMessenger or _FallbackMessenger
-        try:
-            if self.vid is not None:
+        if self.vid is not None:
+            try:
                 self.poller.unregister(self.vid.skt_sub)
+            except Exception:
+                pass
+            try:
                 self.vid.close()
-        except Exception:
-            pass
+            except Exception:
+                pass
+            self.vid = None
 
         self.vid = messenger_cls(self._ctx, None, self.url_vid_sub, "vid", "")
         self.poller.register(self.vid.skt_sub, zmq.POLLIN)
@@ -729,6 +771,17 @@ class MantisCamCtrl:
         frame_name: Optional[str],
         timeout_ms: int,
     ) -> Tuple[np.ndarray, Dict[str, Any]]:
+        # Fail fast when the transport is already torn down (e.g. a prior
+        # recovery failed: close() set _closed=True and left poller/vid None).
+        # In that state _poll() returns {} so the loop below would otherwise
+        # spin to the deadline and raise a misleading DeviceTimeOutError; a
+        # typed connection error is clearer and avoids the needless wait. The
+        # live-transport path is unaffected.
+        if self._closed or self.poller is None or self.vid is None:
+            raise bsl_type.DeviceConnectionFailed(
+                "MantisCam transport is not connected; cannot acquire frame"
+            )
+
         deadline = time.monotonic() + timeout_ms / 1000.0
         frame_name = None if frame_name is None else str(frame_name)
 
@@ -779,6 +832,43 @@ class MantisCamCtrl:
     def _exposure_matches(requested_ms: float, measured_ms: float) -> bool:
         tol = max(abs(requested_ms) * 0.01, 0.1)
         return abs(requested_ms - measured_ms) <= tol
+
+    @staticmethod
+    def _exposure_settle_delay_sec(previous_exposure_ms: float, new_exposure_ms: float) -> float:
+        """Mandatory post-exposure-change settle delay (seconds).
+
+        Applies to cameras that do **not** provide deterministic frame-metadata
+        feedback (e.g. GSense): the applied exposure cannot be confirmed from a
+        frame, so we cannot poll a readback. Instead we block for a
+        physically-motivated worst case so the acquisition pipeline fully
+        flushes frames still integrating at the OLD exposure and stabilizes at
+        the NEW one before any subsequent frame is trusted::
+
+            delay = 2 * max(prev, new) + min(prev, new) + 1.0   [seconds]
+
+        Rationale: a genuinely-new-exposure frame can take up to one old
+        integration plus one new integration to clear the in-flight pipeline;
+        an extra ``max`` integration covers double-buffered / dropped-frame
+        latency, and a fixed +1 s covers backend/stream re-arm time. This is a
+        *floor* (the camera "may need additional time to stabilize"), so it is
+        intentionally uncapped — long exposures wait proportionally longer.
+
+        Parameters
+        ----------
+        previous_exposure_ms : float
+            Exposure (ms) in effect before the change. Non-positive values are
+            treated as ``0`` so the result never drops below the 1 s floor.
+        new_exposure_ms : float
+            Requested new exposure (ms).
+
+        Returns
+        -------
+        float
+            Settle delay in seconds (always ``>= 1.0``).
+        """
+        prev_s = max(float(previous_exposure_ms), 0.0) / 1000.0
+        new_s = max(float(new_exposure_ms), 0.0) / 1000.0
+        return 2.0 * max(prev_s, new_s) + min(prev_s, new_s) + 1.0
 
     @staticmethod
     def _as_numeric(value: Any) -> Union[float, np.ndarray]:
@@ -956,7 +1046,7 @@ class MantisCamCtrl:
             return self.refresh_hardware_nodes()
         return dict(self._hardware_nodes)
 
-    def set_hardware_node(self, node_name: str, value: Any = None) -> None:
+    def set_hardware_node(self, node_name: str, value: Any = None, *, verify: bool = False) -> None:
         """Set a hardware node value by catalog name.
 
         Parameters
@@ -965,11 +1055,23 @@ class MantisCamCtrl:
             Node name from node catalog.
         value : Any, optional
             Target value. For action nodes this may be omitted.
+        verify : bool, optional
+            When True, re-query the hardware-node catalog after the write and
+            confirm the node now reports the requested ``value``; a mismatch
+            raises :class:`bsl_type.DeviceInconsistentError`. Default ``False``
+            preserves the historical fire-and-forget behavior exactly (the write
+            is issued and the method returns immediately without readback).
+            Verification is skipped for action nodes (which carry no readable
+            value) and for nodes the refreshed catalog does not report as
+            readable.
 
         Raises
         ------
         bsl_type.DeviceOperationError
             Raised when the node is not writable or not found.
+        bsl_type.DeviceInconsistentError
+            Raised when ``verify`` is True and the node readback does not match
+            the requested value.
         """
         catalog = self.get_hardware_nodes(refresh=False)
         nodes = catalog.get("nodes", []) if isinstance(catalog, dict) else []
@@ -988,20 +1090,80 @@ class MantisCamCtrl:
         if not command or not payload_key:
             raise bsl_type.DeviceOperationError(f"Node is not writable: {node_name}")
 
-        if str(target.get("value_type", "")).lower() == "action":
+        is_action = str(target.get("value_type", "")).lower() == "action"
+        if is_action:
             self._safe_send("cam", command, {str(payload_key): True if value is None else value})
-            return
-
-        if command in {"spi", "dac", "dly"}:
+        elif command in {"spi", "dac", "dly"}:
             grouped: Dict[str, Any] = {}
             for node in nodes:
                 if node.get("command") == command and node.get("payload_key"):
                     grouped[str(node["payload_key"])] = node.get("value")
             grouped[str(payload_key)] = value
             self._safe_send("cam", command, grouped)
+        else:
+            self._safe_send("cam", command, {str(payload_key): value})
+
+        if not verify or is_action:
             return
 
-        self._safe_send("cam", command, {str(payload_key): value})
+        self._verify_hardware_node(node_name, value)
+
+    def _verify_hardware_node(self, node_name: str, expected: Any) -> None:
+        """Re-query the node catalog and confirm a node reports ``expected``.
+
+        Parameters
+        ----------
+        node_name : str
+            Node name to read back.
+        expected : Any
+            Value requested by the preceding write.
+
+        Raises
+        ------
+        bsl_type.DeviceInconsistentError
+            Raised when the refreshed catalog reports a readable value for the
+            node that does not match ``expected``.
+        """
+        refreshed = self.refresh_hardware_nodes()
+        nodes = refreshed.get("nodes", []) if isinstance(refreshed, dict) else []
+
+        readback: Optional[Dict[str, Any]] = None
+        for node in nodes:
+            if str(node.get("name")) == str(node_name):
+                readback = node
+                break
+
+        if readback is None:
+            raise bsl_type.DeviceInconsistentError(
+                f"Node {node_name} disappeared from catalog after write"
+            )
+
+        # Only verify when the catalog actually reports a readable value; some
+        # nodes are write-only and carry no meaningful readback.
+        if not readback.get("readable", False) or "value" not in readback:
+            return
+
+        actual = readback.get("value")
+        if not self._values_match(expected, actual):
+            raise bsl_type.DeviceInconsistentError(
+                f"Node {node_name} readback {actual!r} does not match requested {expected!r}"
+            )
+
+    @staticmethod
+    def _values_match(expected: Any, actual: Any) -> bool:
+        """Compare a requested node value against its readback.
+
+        Numeric values are compared with a small relative+absolute tolerance to
+        absorb float round-tripping through the backend; everything else falls
+        back to string-normalized equality.
+        """
+        try:
+            exp_f = float(expected)
+            act_f = float(actual)
+        except (TypeError, ValueError):
+            return str(expected).strip() == str(actual).strip()
+        tol = max(abs(exp_f) * 0.01, 1e-6)
+        return abs(exp_f - act_f) <= tol
 
     def _fallback_hardware_nodes(self) -> Dict[str, Any]:
         info = self.get_camera_identity(refresh=False)
@@ -1269,12 +1431,196 @@ class MantisCamCtrl:
     # Exposure and frame operations
     # ---------------------------------------------------------------------
 
+    # ------------------------------------------------------------------ #
+    # Image-correction & processed-H5 save controls (Saver, topic "file") #
+    # ------------------------------------------------------------------ #
+    # Dark / hot-pixel / flat-field correction is performed by the
+    # MantisCamUnified Saver on the PROCESSED-H5 companion only. None of these
+    # alter the raw H5 frames or the live display. A processed companion is
+    # written only when ``save_processed_h5`` is enabled and the "h5" save
+    # target is on. ``*_correction_enabled`` is intent and takes effect only
+    # once the matching reference (dark / flat) has been captured.
+
+    def capture_dark_frame(self) -> None:
+        """Capture a dark reference on the backend (averaged, exposure-aware).
+
+        The Saver accumulates a few dark frames (auto-sized from the current
+        exposure: at most 5 frames / ~3 s total) and stores the average as the
+        dark reference. A hot-pixel map is derived from the SAME capture, so one
+        dark capture provides both dark subtraction and hot-pixel correction.
+
+        Block the light path / cover the sensor before calling. The effect is
+        visible only in the processed-H5 companion (see :meth:`set_save_processed_h5`).
+        """
+        self._safe_send("file", "capture_dark_frame", {"capture": True})
+        self._dark_capture_exposure_ms = self.current_exposure_ms or self._target_exposure_ms
+        self.dark_correction_stale = False
+
+    def clear_dark_frame(self) -> None:
+        """Discard the captured dark reference and its derived hot-pixel map."""
+        self._safe_send("file", "clear_dark_frame", {"clear": True})
+        self._dark_capture_exposure_ms = None
+        self.dark_correction_stale = False
+
+    def set_dark_correction(self, enabled: bool) -> None:
+        """Enable/disable dark subtraction on the processed-H5 companion.
+
+        Takes effect only after a dark reference has been captured via
+        :meth:`capture_dark_frame`.
+
+        Parameters
+        ----------
+        enabled : bool
+            True to apply dark subtraction to the processed companion.
+        """
+        self.dark_correction_enabled = bool(enabled)
+        self._safe_send("file", "dark_correction_enabled", {"enabled": bool(enabled)})
+
+    def set_hot_pixel_correction(self, enabled: bool) -> None:
+        """Enable/disable hot-pixel correction on the processed-H5 companion.
+
+        The hot-pixel map is built from the dark capture, so capture a dark
+        frame (:meth:`capture_dark_frame`) first. Clearing the dark
+        (:meth:`clear_dark_frame`) also clears the hot-pixel map.
+
+        Parameters
+        ----------
+        enabled : bool
+            True to replace flagged hot pixels in the processed companion.
+        """
+        self.hot_pixel_correction_enabled = bool(enabled)
+        self._safe_send("file", "hot_pixel_correction_enabled", {"enabled": bool(enabled)})
+
+    def capture_flat_field(self) -> None:
+        """Capture a flat-field reference on the backend (averaged).
+
+        Illuminate the sensor with a uniform field before calling. The effect is
+        visible only in the processed-H5 companion.
+        """
+        self._safe_send("file", "capture_flat_field", {"capture": True})
+
+    def clear_flat_field(self) -> None:
+        """Discard the captured flat-field reference."""
+        self._safe_send("file", "clear_flat_field", {"clear": True})
+
+    def set_flat_field_correction(self, enabled: bool) -> None:
+        """Enable/disable flat-field correction on the processed-H5 companion.
+
+        Takes effect only after a flat field has been captured via
+        :meth:`capture_flat_field`.
+
+        Parameters
+        ----------
+        enabled : bool
+            True to apply per-pixel flat-field gain to the processed companion.
+        """
+        self.flat_field_correction_enabled = bool(enabled)
+        self._safe_send("file", "flat_field_correction_enabled", {"enabled": bool(enabled)})
+
+    def set_save_processed_h5(self, enabled: bool) -> None:
+        """Choose whether saves also write a PROCESSED-H5 companion file.
+
+        When enabled, each recording/snapshot produces a second ``_proc_*`` HDF5
+        file with the currently-enabled corrections applied (charge-sharing,
+        dark, hot-pixel, flat-field, polcal). The raw H5 is still written
+        whenever the "h5" save target is on. This is the raw-vs-processed
+        file-type control.
+
+        Parameters
+        ----------
+        enabled : bool
+            True to also emit the processed companion.
+        """
+        self.save_processed_h5 = bool(enabled)
+        self._safe_send("file", "save_processed_h5", {"enabled": bool(enabled)})
+
+    def set_save_file_type(self, file_type: str) -> None:
+        """Convenience selector for the type of file saved on record/snapshot.
+
+        Parameters
+        ----------
+        file_type : {"raw", "processed", "both"}
+            ``"raw"``       -> raw H5 only (no processed companion).
+            ``"processed"`` / ``"both"`` -> raw H5 + processed companion with the
+            enabled corrections applied.
+
+        Notes
+        -----
+        All accepted values require the raw H5 frames to be written, so this
+        method also asserts the raw ``"h5"`` save target is enabled (without
+        disturbing the independent ``"isp"`` target). This avoids the silent
+        failure where a prior ``set_save_targets(h5=False)`` would otherwise
+        leave ``"raw"``/``"both"`` writing no raw H5 at all.
+
+        Raises
+        ------
+        bsl_type.DeviceOperationError
+            If ``file_type`` is not one of the accepted values.
+        """
+        ft = str(file_type).strip().lower()
+        if ft not in {"raw", "processed", "both"}:
+            raise bsl_type.DeviceOperationError(
+                f"file_type must be 'raw', 'processed', or 'both' (got {file_type!r})"
+            )
+        # Ensure the raw H5 target is on for every accepted file type, but only
+        # re-send save_targets if it is currently disabled so we never clobber
+        # the user's isp target choice unnecessarily.
+        if not self._save_target_h5:
+            self.set_save_targets(h5=True, isp=self._save_target_isp)
+        self.set_save_processed_h5(ft in {"processed", "both"})
+
+    def set_save_targets(self, *, h5: bool = True, isp: bool = True) -> None:
+        """Select which outputs the Saver produces on record/snapshot.
+
+        Parameters
+        ----------
+        h5 : bool, optional
+            Write HDF5 frame file(s), by default True.
+        isp : bool, optional
+            Write ISP image/video outputs, by default True.
+
+        Notes
+        -----
+        The backend ignores this while a recording or snapshot is in progress.
+        """
+        self._safe_send("file", "save_targets", {"h5": bool(h5), "isp": bool(isp)})
+        self._save_target_h5 = bool(h5)
+        self._save_target_isp = bool(isp)
+
+    def _note_exposure_change_for_dark(self, new_exposure_ms: float) -> None:
+        """Flag the dark reference stale and warn when exposure moves post-capture.
+
+        The dark reference (and the hot-pixel map derived from it) is
+        exposure-dependent because dark current scales with integration time.
+        When the user changes exposure after a dark capture, the existing dark
+        no longer matches; recommend re-capturing.
+        """
+        ref = self._dark_capture_exposure_ms
+        if ref is None:
+            return
+        tol = max(abs(float(ref)) * 0.01, 0.05)
+        if abs(float(new_exposure_ms) - float(ref)) > tol:
+            self.dark_correction_stale = True
+            if self.dark_correction_enabled or self.hot_pixel_correction_enabled:
+                logger.warning(
+                    "MantisCam dark/hot-pixel correction is active but exposure changed "
+                    "since the dark frame was captured ({:.4g} ms -> {:.4g} ms). The dark "
+                    "reference is exposure-dependent; re-take it with capture_dark_frame() "
+                    "at the new exposure for accurate correction.",
+                    float(ref),
+                    float(new_exposure_ms),
+                )
+
     def set_exposure_time(self, exposure_ms: float, *, strict: bool = True, timeout_ms: int = 8000) -> bool:
         """Set camera exposure time in milliseconds.
 
         Exposure validation behavior:
 
-        - GSense cameras use safeguard timing (metadata not trusted).
+        - GSense cameras provide no deterministic frame metadata, so the applied
+          exposure cannot be verified from a frame. Instead the call blocks for the
+          mandatory settle delay ``2*max(prev, new) + min(prev, new) + 1 s``
+          (see :meth:`_exposure_settle_delay_sec`; ``prev`` = exposure before the
+          change, ``new`` = requested; uncapped floor) and then assumes success.
         - Other cameras verify readback from frame metadata.
         - Readback is accepted when error is within max(``1%``, ``0.1 ms``).
 
@@ -1298,7 +1644,7 @@ class MantisCamCtrl:
             Raised when strict mode is enabled and verification fails.
         """
         target = float(exposure_ms)
-        self._target_exposure_ms = target
+        previous_exposure_ms = self.current_exposure_ms
         self._drain_nonblocking()
         gsense_mode = self._is_gsense_camera()
         if not gsense_mode:
@@ -1309,17 +1655,42 @@ class MantisCamCtrl:
                 pass
             gsense_mode = self._is_gsense_camera()
 
+        intent_recorded = False
         for _ in range(2):
             self._safe_send("cam", "exp-00", {"exp-00": target})
             self._safe_send("widget", "exp-00", {"exp-00": target})
 
+            # The exposure command was accepted by the transport. Advance the
+            # local intent state (and emit the dark-staleness warning) now,
+            # only once, and only after a successful send so a send failure
+            # (which raises from _safe_send above) cannot leave intent advanced
+            # or log a misleading "exposure changed since dark capture" warning
+            # for a command that was never applied. This runs before the
+            # GSense early-return and the verify loop, so every downstream path
+            # (GSense success, verify success, strict-raise, return False) sees
+            # consistent dark-staleness state once the command is on the wire.
+            if not intent_recorded:
+                self._target_exposure_ms = target
+                self._note_exposure_change_for_dark(target)
+                intent_recorded = True
+
             if gsense_mode:
-                guard_delay = min(max(target / 1000.0, 0.02) * 2.0 + 0.25, 3.0)
-                time.sleep(guard_delay)
+                # GSense provides no deterministic frame-metadata feedback, so the
+                # applied exposure cannot be verified from a frame. Block for the
+                # mandatory settle delay (worst-case pipeline flush + re-arm) so the
+                # sensor stabilizes at the new exposure before it is trusted. This is
+                # a floor and is intentionally uncapped — long exposures wait longer.
+                settle_sec = self._exposure_settle_delay_sec(previous_exposure_ms, target)
+                time.sleep(settle_sec)
                 self.current_exposure_ms = target
                 self._monitor_connected()
                 return True
 
+            # Reset the readback latch so a stale value (carried over from a
+            # prior call or written by the pre-send _drain_nonblocking) cannot
+            # falsely confirm the new exposure. Only a frame whose metadata
+            # arrives AFTER this command may satisfy _exposure_matches.
+            self._last_received_exp_ms = None
             deadline = time.monotonic() + timeout_ms / 1000.0
             while time.monotonic() < deadline:
                 sockets = self._poll(self._POLL_STEP_MS)

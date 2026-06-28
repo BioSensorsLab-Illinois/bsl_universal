@@ -132,6 +132,13 @@ class USB_520:
             True when reconnection succeeds.
         """
         if device_sn:
+            if "CH" in device_sn:
+                try:
+                    device_sn = self.USB_520_SN[device_sn].value
+                except KeyError as exc:
+                    raise bsl_type.DeviceConnectionFailed(
+                        f"Unknown USB_520 channel alias: {device_sn}"
+                    ) from exc
             self._target_device_sn = device_sn
         self.close()
         if not self._serial_connect():
@@ -167,7 +174,7 @@ class USB_520:
             return float(match.group(1))
         else:
             self.logger.warning("Unable to find a force reading! please check the device.")
-            return 999
+            return None
     
     
     def get_new_measurement(self, timeout_ms:int = 10000, enable_tear:bool = True) -> float:
@@ -189,18 +196,26 @@ class USB_520:
         force : `float`
             The force value in grams read back from the sensor.
         """
-        self.serial.serial_port.timeout = (timeout_ms/1000)
+        deadline_sec = (timeout_ms/1000)
+        self.serial.serial_port.timeout = deadline_sec
         self.serial.flush_read_buffer()
         msg = ""
         start = time.time()
 
         self.logger.debug("Waiting for new measurement...")
-        while ("g" not in msg) and ((time.time()-start) < (timeout_ms/1000)):
+        while ("g" not in msg) and ((time.time()-start) < deadline_sec):
+            # Cap the per-readline serial timeout to the remaining loop budget so a
+            # readline() that starts just before the deadline cannot block for the
+            # full budget again (which would ~double the worst-case block time).
+            remaining = deadline_sec - (time.time() - start)
+            if remaining <= 0:
+                break
+            self.serial.serial_port.timeout = remaining
             msg = self.serial.readline()
             if "g" in msg:
                 self.logger.debug(f"New measurement received: {msg}")
                 force = self.__extract_float(msg)
-                if force == 999:
+                if force is None:
                     msg = ""
                     self.logger.warning("Retrying...")
                     pass
@@ -229,6 +244,8 @@ class USB_520:
         force : `float`
             The force value in grams for the calibration.
         """
+        if average_count < 1:
+            raise bsl_type.DeviceOperationError("average_count must be >= 1")
         self.logger.debug("Setting tear calibration...")
         count = 0
         sum = 0.0

@@ -102,7 +102,7 @@ class _bsl_inst_info_list:
 
     TEST_DEVICE_NO_BAUD = _bsl_inst_info_class(
         MANUFACTURE="BSL",
-        MODEL="TEST_DEVICE_BAUD",
+        MODEL="TEST_DEVICE_NO_BAUD",
         TYPE="TEST_DEVICE_BAUD",
         SERIAL_NAME="Incoming",
         INTERFACE="Serial",
@@ -116,7 +116,7 @@ class _bsl_inst_info_list:
 
     TEST_DEVICE_BAUD = _bsl_inst_info_class(
         MANUFACTURE="BSL",
-        MODEL="TEST_DEVICE_NO_BAUD",
+        MODEL="TEST_DEVICE_BAUD",
         TYPE="TEST_DEVICE_BAUD",
         BAUDRATE=115200,
         SERIAL_NAME="Incoming",
@@ -136,8 +136,8 @@ class _bsl_inst_info_list:
         BAUDRATE=460800,
         SERIAL_NAME="FT232R USB UART",
         INTERFACE="Serial",
-        USB_PID="0x0403",
-        USB_VID="0x6001",
+        USB_PID="0x6001",
+        USB_VID="0x0403",
         QUERY_CMD="USN\r\n",
         QUERY_E_RESP="HX0650",
         QUERY_SN_CMD="USN\r\n",

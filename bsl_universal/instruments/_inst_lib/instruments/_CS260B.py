@@ -227,7 +227,7 @@ class CS260B:
         return 0
 
 
-    def set_wavelength(self, wavelength:float=0.0, auto_grating:bool = True, auto_filter:bool = True) -> float:
+    def set_wavelength(self, wavelength:float=0.0, auto_grating:bool = True, auto_filter:bool = True) -> int:
         """
         - set output wavelength of the monochromator in nm.
 
@@ -575,10 +575,12 @@ class CS260B:
         if err_code == '0' or err_code == "501":
             return 0
 
-        while (err_code != '0' and count < 11):
+        while (err_code != '0' and err_code != "501" and count < 11):
             count += 1
             self.logger.error(f"Device Error with error code:{err_code}; error msg: {err_msg}.")
             (err_code, err_msg) = self._com.query("SYSTEM:ERROR?").split(',')
+        if err_code == '0' or err_code == "501":
+            return 0
         raise bsl_type.DeviceOperationError
     
 

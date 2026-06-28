@@ -637,9 +637,16 @@ class RS_7_1:
         self._com_cmd(msg)
 
     #checked
-    def set_power_led_random(self, power_percentage:int=5) -> 'list[float]':
+    def set_power_led_random(self, power_percentage:int=5) -> None:
         """
         - Set output spectrum to a random spectrum.
+
+        Parameters
+        ----------
+        power_percentage : `int`
+            (default = 5)
+            Maximum per-channel drive level (percent) used as the upper bound
+            for the randomly generated per-channel powers.
 
         Uses
         ----------
@@ -648,8 +655,8 @@ class RS_7_1:
 
         Returns
         --------
-        Output_spectrum : `list[float]`
-            Actual output spectrum with a.u. from 360nm to 1100nm with step size of 1nm.
+        None
+            This function applies a random spectrum to the device and returns nothing.
         """
         spectrum = np.random.random([len(self.LED_CHANNELS.LEN_CHANS_NO_WHITE.value)])*power_percentage
         self.set_power_chans(self.LED_CHANNELS.LEN_CHANS_NO_WHITE.value,spectrum)
@@ -1317,9 +1324,10 @@ class RS_7_1:
         ids = np.asarray(self.LED_CHANNELS.LEN_CHANS_NO_WHITE.value)
         lambdas = np.asarray(self.LED_CHANNELS.WAVELENGTH.value)
         for id in ids:
-            if (lambdas[id] not in wavelengths) and (lambdas[id] != 0):
+            wl = lambdas[id-1]
+            if (wl not in wavelengths) and (wl != 0):
                 led_chan_id.append(id)
-                wavelengths.append(lambdas[id])
+                wavelengths.append(wl)
         return (led_chan_id, wavelengths)
 
     def close(self) -> None:

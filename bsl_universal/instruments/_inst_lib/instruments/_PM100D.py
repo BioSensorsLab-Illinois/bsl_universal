@@ -283,6 +283,8 @@ class PM100D:
         power : `np.float64`
             The average of all of theindividual measurements.
         """
+        if avg < 1:
+            raise bsl_type.DeviceOperationError("avg must be >= 1")
         cnt = 0
         power = 0
         while cnt<avg:
@@ -324,6 +326,8 @@ class PM100D:
         power : `np.float64`
             (W/cm^2) The average of all of theindividual measurements.
         """
+        if avg < 1:
+            raise bsl_type.DeviceOperationError("avg must be >= 1")
         cnt = 0
         power = 0
         while cnt<avg:
@@ -334,13 +338,13 @@ class PM100D:
         return power
         
     #un tested
-    def get_power_measuring_range(self) -> int:
+    def get_power_measuring_range(self) -> np.float64:
         """
         - ???
 
         Returns
         --------
-        range : `int`
+        range : `np.float64`
             ???
         """
         power_range = np.float64(self._com.query("SENS:POW:RANG:UPP?")) # CHECK RANGE

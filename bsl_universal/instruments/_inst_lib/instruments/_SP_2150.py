@@ -129,6 +129,14 @@ class SP_2150:
         wavelength : `int`
             Wavelength (in nm) to set the monochromator to.
         """
+        try:
+            wavelength_value = float(wavelength)
+        except (TypeError, ValueError):
+            self.logger.error(f"Wavelength must be a number, got {wavelength!r}")
+            raise bsl_type.DeviceOperationError
+        if wavelength_value <= 0:
+            self.logger.error(f"Wavelength must be positive, got {wavelength_value} nm")
+            raise bsl_type.DeviceOperationError
         self._com_cmd(f"{wavelength} GOTO")
         self.logger.info(f"Output set to {wavelength} nm.")
         return None
@@ -186,7 +194,7 @@ class SP_2150:
             self._com.flush_read_buffer()
             self._com.write(msg+'\r')
             resp = self._com.readline()
-        if resp in msg:
+        if resp and resp in msg:
             resp = self._com.readline()
         return resp
 

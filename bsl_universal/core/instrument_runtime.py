@@ -384,13 +384,15 @@ class ManagedInstrument:
         """
         if self._closed:
             return
-        self._closed = True
 
         error_message = ""
         try:
             callback = getattr(self._device, "close", None)
             if callable(callback):
                 callback()
+            # Mark closed only after a successful close so that a failed
+            # close() can be retried and does not leak the device handle.
+            self._closed = True
         except Exception as exc:
             error_message = str(exc)
             raise

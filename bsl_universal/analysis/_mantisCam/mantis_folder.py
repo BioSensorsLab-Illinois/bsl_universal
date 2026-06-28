@@ -43,7 +43,7 @@ class mantis_folder:
         match = re.search(r'\d+\.\d+(?=ms)', file_name)
         return float(match.group())  # Extract the float value from the time string without the 'ms' unit
 
-    def __init_mantis_video_dict(self, sort_with_exp:bool=True):
+    def __init_mantis_video_dict(self, sort_with_exp:bool=False):
         filepaths = [f for f in self.path.iterdir() if f.is_file() and f.suffix == '.h5']
         for filepath in filepaths:
             self.__videos[filepath.name] = mantis_file(filepath, x3_conv=self.x3_conv, conv_param=self.x3_conv_param)

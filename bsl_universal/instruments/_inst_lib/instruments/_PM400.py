@@ -283,6 +283,8 @@ class PM400:
         power : `np.float64`
             The average of all of theindividual measurements.
         """
+        if avg < 1:
+            raise bsl_type.DeviceOperationError("avg must be >= 1")
         cnt = 0
         power = 0
         while cnt<avg:
@@ -307,7 +309,7 @@ class PM400:
             (W/cm^2) The average of all of theindividual measurements.
         """
         power = np.float64(self._com.query("MEAS:PDEN?"))
-        self.logger.info(f"Current Power measured: {power*1000:.2f}mW.")
+        self.logger.info(f"Current power density: {power:.4g} W/cm^2.")
         return power
     
     def get_measured_power_density_avg(self, avg:int=1) -> np.float64:
@@ -324,6 +326,8 @@ class PM400:
         power : `np.float64`
             (W/cm^2) The average of all of theindividual measurements.
         """
+        if avg < 1:
+            raise bsl_type.DeviceOperationError("avg must be >= 1")
         cnt = 0
         power = 0
         while cnt<avg:
@@ -334,7 +338,7 @@ class PM400:
         return power
         
     #un tested
-    def get_power_measuring_range(self) -> int:
+    def get_power_measuring_range(self) -> np.float64:
         """
         - ???
 
@@ -348,18 +352,23 @@ class PM400:
         return power_range
 
     #un tested
-    def set_power_range(self, range:np.float64) -> None:
+    def set_power_range(self, power_range:np.float64) -> np.float64:
         """
-        - ???
+        - Set the upper bound of the power measuring range (`Watts`).
 
         Parameters
         --------
-        range : `np.float64`
-            ???
+        power_range : `np.float64`
+            Upper bound of the power measuring range in `Watts`.
+
+        Returns
+        --------
+        power_range : `np.float64`
+            Power measuring range upper bound readback from the power meter.
         """
-        self._com.write("SENS:POW:RANG:UPP {}".format(range))
-        self.logger.info(f"Set Power_measuring_range to {range}mW.")
-        pass
+        self._com.write("SENS:POW:RANG:UPP {}".format(power_range))
+        self.logger.info(f"Set Power_measuring_range to {power_range}W.")
+        return self.get_power_measuring_range()
 
     def get_auto_range_status(self) -> bool:
         """

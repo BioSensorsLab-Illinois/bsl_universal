@@ -169,7 +169,7 @@ class _bsl_serial:
         for port in com_ports_list:
             temp_port = None
 
-            if self.inst.SERIAL_SN in port[0]:
+            if self.inst.SERIAL_SN and self.inst.SERIAL_SN != "N/A" and self.inst.SERIAL_SN in port[0]:
                 logger_opt.info(
                     "    Specified device <light-blue><italic>{}</italic></light-blue> with Serial SN <light-blue><italic>{}</italic></light-blue> found on port <light-blue><italic>{}</italic></light-blue> by Device Serial SN search.",
                     self.inst.MODEL,
@@ -188,7 +188,7 @@ class _bsl_serial:
                 )
                 temp_port = port[0]
 
-            if self.inst.SERIAL_NAME in port[1]:
+            if self.inst.SERIAL_NAME and self.inst.SERIAL_NAME != "N/A" and self.inst.SERIAL_NAME in port[1]:
                 logger_opt.info(
                     "    Specified device <light-blue><italic>{}</italic></light-blue> with Serial_Name <light-blue><italic>{}</italic></light-blue> found on port <light-blue><italic>{}</italic></light-blue> by Device name search.",
                     self.inst.MODEL,

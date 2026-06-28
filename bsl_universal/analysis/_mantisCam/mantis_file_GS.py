@@ -94,12 +94,16 @@ class mantis_file_GS:
             self.Threshold = self.Threshold_FSI
             self.Dark_Level_LG = self.Dark_Level_LG_FSI
             self.Dark_Level_HG = self.Dark_Level_HG_FSI
-        else:  # BSI
+        elif imager_type.upper() == "BSI":
             self.K_HG = self.K_HG_BSI
             self.K_LG = self.K_LG_BSI
             self.Threshold = self.Threshold_BSI
             self.Dark_Level_LG = self.Dark_Level_LG_BSI
             self.Dark_Level_HG = self.Dark_Level_HG_BSI
+        else:
+            raise ValueError(
+                f"Unsupported imager_type={imager_type!r}; expected 'FSI' or 'BSI'."
+            )
 
         self.K_RATIO = self.K_HG / self.K_LG
 

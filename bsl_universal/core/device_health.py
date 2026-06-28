@@ -37,9 +37,37 @@ _STATE_DIR = Path.home() / ".bsl_universal"
 _STATE_FILE = _STATE_DIR / "device_monitor_state.json"
 _EMAIL_FILE = _STATE_DIR / "device_monitor_email.json"
 _DEFAULT_OAUTH_TOKEN_FILE = _STATE_DIR / "gmail_oauth_token.json"
-_DEFAULT_OAUTH_CLIENT_SECRET_FILE = Path(
+# Legacy lab-deployment fallback. Kept ONLY for backward compatibility on the
+# original deployment machine; new installs should set $BSL_OAUTH_CLIENT_SECRET
+# or drop the file at ~/.bsl_universal/gmail_client_secret.json instead.
+_LEGACY_OAUTH_CLIENT_SECRET_FILE = Path(
     "/Users/zz4/Downloads/client_secret_282428684630-9luunv8pkoc6odqri3cnn1vni5dbff1q.apps.googleusercontent.com.json"
 )
+
+
+def _resolve_default_oauth_client_secret() -> Path:
+    """Resolve the default OAuth client-secret file in a machine-portable way.
+
+    Resolution order (first match wins):
+      1. ``$BSL_OAUTH_CLIENT_SECRET`` environment variable (if set/non-empty).
+      2. ``~/.bsl_universal/gmail_client_secret.json`` if it exists.
+      3. The legacy lab-deployment path (backward compatibility fallback).
+
+    Returns
+    -------
+    Path
+        Path to use as the default OAuth client-secret file.
+    """
+    env_path = os.environ.get("BSL_OAUTH_CLIENT_SECRET", "").strip()
+    if env_path:
+        return Path(env_path).expanduser()
+    state_default = _STATE_DIR / "gmail_client_secret.json"
+    if state_default.exists():
+        return state_default
+    return _LEGACY_OAUTH_CLIENT_SECRET_FILE
+
+
+_DEFAULT_OAUTH_CLIENT_SECRET_FILE = _resolve_default_oauth_client_secret()
 # SMTP XOAUTH2 for Gmail requires full mail scope.
 _GMAIL_SCOPES = ("https://mail.google.com/",)
 _LEGACY_GMAIL_SEND_SCOPE = "https://www.googleapis.com/auth/gmail.send"
@@ -964,7 +992,15 @@ class DeviceHealthHub:
                 "session_id": str(payload.get("session_id", "") or ""),
             }
             if not base["key"]:
-                key = self._build_key(base["model"], base["serial_number"])
+                # _build_key expects the logical instrument key, not the device
+                # MODEL string. Legacy persisted payloads predate the explicit
+                # key field; prefer an explicit "instrument_key" when present and
+                # fall back to "model" only as a last resort (behavior-preserving
+                # for existing keyless entries, which carry no instrument_key).
+                legacy_instrument_key = str(
+                    payload.get("instrument_key") or base["model"]
+                )
+                key = self._build_key(legacy_instrument_key, base["serial_number"])
                 base["key"] = key
             return DeviceStatus(**base)
         except Exception:

@@ -1,0 +1,27 @@
+{
+  "$comment": "Project hooks for bsl_universal. The Stop hook enforces the hardened rule in CLAUDE.md: AI changes to the library source must be followed by a skill re-audit + API doc update before the turn can end. See .claude/skills/bsl-universal/MAINTENANCE.md.",
+  "hooks": {
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/skills/bsl-universal/scripts/hook_stop_sync.py\""
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/skills/bsl-universal/scripts/hook_posttool_notice.py\""
+          }
+        ]
+      }
+    ]
+  }
+}
