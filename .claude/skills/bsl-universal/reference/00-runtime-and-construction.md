@@ -189,3 +189,17 @@ does this automatically. To quiet things down, call it **before** constructing a
 from bsl_universal.instruments import init_logger
 init_logger("WARNING")
 ```
+
+### File logging (for the web monitor's log analyzer)
+
+In addition to the colorized stdout/stderr sinks, `init_logger` adds a **rotating JSON-lines file
+sink** — one file per process at `~/.bsl_universal/logs/bsl_<pid>_<timestamp>.log` (rotation 10 MB,
+retention 10 days, `serialize=True`, `enqueue=True` so it never blocks the hardware path). One file
+per pid avoids multi-process write contention; the web monitor's log analyzer reads and aggregates
+all of them.
+
+- `bsl_universal.core.logging.log_directory() -> Path` returns the active log directory.
+- `init_logger(LOG_LEVEL, *, log_to_file=True)` — pass `log_to_file=False` to skip the file sink for
+  one call.
+- Env: `BSL_LOG_DIR` overrides the directory; `BSL_DISABLE_FILE_LOG` (any value) disables file
+  logging entirely. File-sink setup failures are caught and never break instrument code.

@@ -1,0 +1,14 @@
+# Ship the web monitor's browser assets in the source distribution so that
+# `pip install` (from sdist) and `pip wheel` both include the UI files.
+recursive-include bsl_universal/core/_web_monitor/static *
+
+# Keep the dependency manifest and docs in the sdist.
+include requirements.txt
+include README.md
+include Agent.md
+include LICENSE*
+
+# Housekeeping: never ship editor/OS cruft or bytecode.
+global-exclude .DS_Store
+global-exclude *.py[cod]
+global-exclude __pycache__/*

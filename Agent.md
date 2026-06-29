@@ -75,18 +75,18 @@ Additive runtime safety helpers are attached when possible:
 - `.safe.<method>(...)` executes with bounded retry + reset/reconnect recovery.
 - `.invoke(...)` / `.invoke_safe(...)` provide explicit recovery-managed calls.
 - `.reconnect_safe()` and `.reset_safe()` expose guarded recovery calls.
-- `.close()` is monitored so GUI state transitions to disconnected.
+- `.close()` is monitored so the web monitor state transitions to disconnected.
 - Managed instances auto-release on object destruction (`del` + GC), and monitor
   status is published as disconnected even when users forget to call `.close()`.
 - MantisCam entries are additionally validated against local `MantisCamUnified`
   command ports (`127.0.0.1:60000` and `60001`); if backend process is gone,
-  GUI state is auto-marked as disconnected.
+  monitor state is auto-marked as disconnected.
 - MantisCam runtime now publishes live monitor transitions from transport
   activity/timeouts: warning on link degradation, disconnected when backend is
   unreachable, and auto-connected again when communication resumes (including
   camera swaps behind the same backend process).
-- Monitor publishes a `CONNECTING` status before constructor handshake so GUI can
-  display in-progress connection attempts.
+- Monitor publishes a `CONNECTING` status before constructor handshake so the web
+  monitor can display in-progress connection attempts.
 - MantisCam monitor identity is single-active per runtime process; sequential
   reconnects replace older entries instead of accumulating stale rows.
 - Monitor email alerts use Google Workspace OAuth interactive authorization only.
@@ -95,10 +95,10 @@ Additive runtime safety helpers are attached when possible:
   Alerting supports multiple status categories (`CONNECTING`, `CONNECTED`,
   `DISCONNECTED`, `WARNING`, `UNRECOVERABLE_FAILURE`, `STALE_SESSION`) with
   default-category selection and per-instrument override matrix.
-  The policy is editable from monitor GUI via `Alert Categories...` pop-up.
+  The policy is editable from the web monitor's `email alerts` panel.
   The matrix editor lists connected instruments only.
   Default OAuth client-secret JSON is hardcoded for lab deployment; overriding
-  the JSON path is available via monitor GUI `Settings > Advanced`.
+  the JSON path is available via the web monitor's email-alerts `advanced` section.
   Tokens with legacy `gmail.send` scope are treated as incompatible in SMTP mode
   and require re-authorization.
 

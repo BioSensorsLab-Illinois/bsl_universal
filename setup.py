@@ -3,7 +3,15 @@ from setuptools import setup, find_packages
 setup(
   name = 'bsl_universal',         # How you named your package folder (MyLib)
   packages = find_packages(),   # Chose the same as "name"
-  version = '2.0.0',      # Start with a small number and increase it with every change you make
+  include_package_data = True,   # honor MANIFEST.in when collecting package data
+  package_data = {
+      # Ship the web monitor's browser assets (HTML/CSS/JS) inside the wheel.
+      # find_packages() only collects .py files, so without this `pip install`
+      # would omit static/ and the monitor page would 404 its own assets.
+      'bsl_universal.core._web_monitor': ['static/*'],
+  },
+  python_requires = '>=3.8',
+  version = '2.0.1',      # Start with a small number and increase it with every change you make
   license='MIT',        # Chose a license from here: https://help.github.com/articles/licensing-a-repository
   description = 'Universal Research Library for BioSensors Lab @ UIUC',   # Give a short description about your library
   author = 'Zhongmin Zhu',                   # Type in your name

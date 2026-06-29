@@ -6,7 +6,7 @@ Universal hardware control and camera-analysis library used by BioSensors Lab (U
 
 - Unified constructors for supported lab instruments.
 - Runtime stability helpers (retry/reconnect/reset paths).
-- A live GUI monitor for connection status and health.
+- A live **web** monitor (browser-based, LAN-accessible) for connection status and health.
 - Email alerts (Google Workspace OAuth via Gmail SMTP XOAUTH2).
 - MantisCam control and recording utilities over ZMQ.
 - Analysis loaders for MantisCam `.h5` data.
@@ -23,7 +23,7 @@ Universal hardware control and camera-analysis library used by BioSensors Lab (U
 8. [Instrument API Quick Reference](#instrument-api-quick-reference)
 9. [IDE Typing and Autocomplete](#ide-typing-and-autocomplete)
 10. [MantisCam Control API](#mantiscam-control-api)
-11. [Device Monitor GUI](#device-monitor-gui)
+11. [Device Monitor (Web)](#device-monitor-web)
 12. [Email Alerts (Google Workspace OAuth)](#email-alerts-google-workspace-oauth)
 13. [Runtime State Files](#runtime-state-files)
 14. [Stability and Recovery Model](#stability-and-recovery-model)
@@ -53,7 +53,7 @@ Core objectives:
   - `safe.<method>(...)` recovery-managed method calls.
   - `invoke("method", ...)` or `invoke_safe(...)`.
   - `reconnect_safe()` and `reset_safe()`.
-- Automatic monitor window startup on first instrument initialization.
+- Automatic web-monitor startup on first instrument initialization (opens in your browser).
 - Automatic disconnection publication when objects are released and closed.
 - MantisCam-specific monitor hooks:
   - connecting/connected/disconnected/warning transitions,
@@ -87,10 +87,11 @@ Shared transport wrappers:
 
 Both implement bounded retries and reconnect attempts.
 
-### 4) Runtime health + GUI
+### 4) Runtime health + web monitor
 
 - `DeviceHealthHub`: thread-safe device state registry and persistence.
-- `device_monitor_gui.py`: subprocess Tk app for live status visualization.
+- `_web_monitor/`: zero-dependency stdlib HTTP + Server-Sent Events server that serves a live status dashboard to the browser.
+- `device_monitor_gui.py`: launcher (`start_device_monitor_window`) that spawns the web monitor subprocess and opens a browser.
 
 ### 5) Analysis layer
 
@@ -131,7 +132,7 @@ Minimum runtime dependencies are listed in `requirements.txt`, including:
 
 Notes:
 
-- GUI requires Tkinter availability in your Python distribution.
+- The web monitor uses only the Python standard library and any modern browser. No Tkinter / GUI toolkit required.
 - VISA availability depends on backend/runtime environment.
 - MantisCam control requires reachable MantisCamUnified ZMQ endpoints.
 
@@ -267,22 +268,41 @@ Primary class: `MantisCamCtrl` (`inst.mantisCam(...)`).
 
 - `run_auto_exposure(...)` uses ISP statistics / frame mean feedback.
 
-## Device Monitor GUI
+## Device Monitor (Web)
 
-A monitor window starts automatically when an instrument is first initialized.
+The monitor is a **browser-based web app** (zero extra dependencies — Python standard-library HTTP +
+Server-Sent Events). A monitor server starts automatically and opens in your browser when an instrument
+is first initialized in a process.
 
-Function:
+Functions / entry points:
 
-- `bsl_universal.core.device_monitor_gui.start_device_monitor_window()`
+- `bsl_universal.core.device_monitor_gui.start_device_monitor_window()` — ensures the server is running
+  and opens the page (idempotent; back-compatible name; `start_device_monitor_web` is an alias).
+- Standalone: `python -m bsl_universal.core._web_monitor`
 
-The GUI shows:
+It is **single-instance per host:port**: every process points the operator at the same live page. The
+server reads the shared `~/.bsl_universal` state, so it shows instruments from **all** processes on the
+machine, updating live over SSE.
 
-- Model/nickname, type, serial number
-- Status (`CONNECTING`, `CONNECTED`, `DISCONNECTED`, `WARNING`, `UNRECOVERABLE_FAILURE`, `STALE_SESSION`)
-- Last update time and last error
-- Summary cards by status
-- Filter and active-only view
-- Actions to clear stale/disconnected/failure rows
+Configuration (environment variables):
+
+- `BSL_MONITOR_PORT` — server port (default `8787`).
+- `BSL_MONITOR_HOST` — bind address (default `0.0.0.0`, LAN-accessible).
+- `BSL_MONITOR_NO_BROWSER` — set to any value to suppress auto-opening the browser.
+
+The page shows:
+
+- Status-count cards (click to filter).
+- A live device table: model/nickname, type, serial, status pill, last update, owner PID, last error.
+- Text filter and active-only toggle.
+- A per-device detail drawer: full fields, uptime, and a status-history timeline.
+- Clear actions (disconnected/stale, warnings/failures, all) and CSV/JSON export.
+- Dark/light theme and optional desktop + sound alerts on new warnings/failures.
+- The full email-alerts panel (see below), including the per-instrument category matrix.
+
+> ⚠️ **LAN exposure / no authentication.** With the default `0.0.0.0` bind, anyone on the lab network
+> can open the page, change alert settings, and trigger the Google authorization flow **on the host
+> machine**. Set `BSL_MONITOR_HOST=127.0.0.1` to restrict the monitor to the local machine.
 
 ### Status semantics
 
@@ -303,19 +323,18 @@ Current flow is OAuth-only (no app-password fallback).
 
 - `students@bsl-uiuc.com`
 
-### GUI configuration
+### Web configuration
 
-In the monitor window:
+In the monitor page, open `email alerts`:
 
-- Keep recipient email in the main alert card.
-- Open `Settings -> Advanced -> OAuth / Server JSON...` for:
-  - sender workspace email,
-  - OAuth client secret JSON path,
-  - token file path.
+- Enable alerts and set the recipient email.
+- Expand `advanced` for sender workspace email, OAuth client-secret JSON path, and token file path.
+- Edit default categories and the per-instrument override matrix inline.
 
 ### First-time authorization
 
-Use `Authorize Google Workspace` button in the GUI.
+Use the `authorize google` button in the email-alerts panel. Note the OAuth flow runs on the **host
+machine** (the one running the server), where the consent browser opens.
 
 Expected behavior:
 
@@ -342,7 +361,7 @@ Policy controls:
 
 - Default categories for all instruments.
 - Optional per-instrument category override matrix.
-- Matrix popup shows connected instruments only.
+- Matrix editor shows connected instruments only.
 
 ## Runtime State Files
 
@@ -352,7 +371,7 @@ Runtime monitor and email configuration are persisted under:
 - `~/.bsl_universal/device_monitor_email.json`
 - `~/.bsl_universal/gmail_oauth_token.json` (default token path)
 
-The library includes a default OAuth client-secret path in code. In production, use the GUI advanced settings to point to your own managed OAuth client-secret file.
+The library includes a default OAuth client-secret path in code. In production, use the email-alerts `advanced` settings in the web monitor to point to your own managed OAuth client-secret file.
 
 ## Stability and Recovery Model
 
@@ -457,17 +476,18 @@ The health hub reconciles MantisCam liveness by probing required local command p
 
 This library uses OAuth XOAUTH2 SMTP. Ensure:
 
-- OAuth authorization completed in GUI,
+- OAuth authorization completed in the web monitor,
 - token includes `https://mail.google.com/` scope,
 - signed-in account matches sender email (or has send-as permission),
 - Workspace SMTP AUTH policy allows the account.
 
-### No GUI window appears
+### Monitor page does not open
 
 Possible causes:
 
-- Tkinter unavailable in Python environment.
-- Monitor subprocess startup blocked by environment policy.
+- The browser did not auto-open (set/unset `BSL_MONITOR_NO_BROWSER`); open `http://127.0.0.1:8787/` manually.
+- The port is in use by another app; set `BSL_MONITOR_PORT`.
+- Monitor subprocess startup blocked by environment policy; run `python -m bsl_universal.core._web_monitor` to see logs.
 
 ### VISA devices not found
 
@@ -491,7 +511,8 @@ Check:
 bsl_universal/
   core/
     device_health.py          # Runtime status registry + email alert delivery
-    device_monitor_gui.py     # Tk monitor subprocess GUI
+    device_monitor_gui.py     # Web monitor launcher (start_device_monitor_window)
+    _web_monitor/             # Stdlib HTTP + SSE monitor server + static SPA (browser UI)
     instrument_runtime.py     # Recovery manager, safe proxy, managed wrapper
     logging.py                # Loguru setup
     exceptions.py             # Public exception aliases
