@@ -738,7 +738,8 @@ class RS_7_1:
             the desired imaging plane. Only used for irradiance or illuminance
             power profile.
         """
-        self.set_spectrum_raw(self.get_spectrum_output(),power=power,power_unit=unit,irr_distance_mm=irr_distance_mm)
+        _, current_spectrum = self.get_spectrum_output()
+        self.set_spectrum_raw(current_spectrum, power=power, power_unit=unit, irr_distance_mm=irr_distance_mm)
         self.logger.info(f"Output spectrum power set to: {power}{self.POWER_UNIT.UNITS.value[unit.value]}, irradiance distance: {irr_distance_mm}.")
         return None
 
@@ -807,8 +808,9 @@ class RS_7_1:
             self.logger.error("Provided spectrum data's length doesn't match current wavelength min_max setting!")
             raise bsl_type.DeviceOperationError
         msg_spectrum = ','.join(['{:.6f}'.format(x) for x in spectrum])
-        self._com_cmd(f"TSP{msg_spectrum}")
-        
+        # TSP transfers 741 spectrum points; allow extra time on slow serial.
+        self._com_cmd(f"TSP{msg_spectrum}", timeout=5.0)
+
         if power != 0:
             self._com_cmd(f"STS{power:.4f}")
             self.logger.debug(f"Target spectrum power scaled to {power}{self.POWER_UNIT.UNITS.value[power_unit.value]}.")
@@ -819,9 +821,10 @@ class RS_7_1:
         if fit_max_pwr:
             msg_cmd = msg_cmd + "M"
 
-        self._com_cmd(f"{msg_cmd}")
+        # FTS runs on-device spectrum fitting; can take several seconds.
+        self._com_cmd(f"{msg_cmd}", timeout=10.0)
         if chroma_correction:
-            self._com_cmd("CCS")
+            self._com_cmd("CCS", timeout=5.0)
         return self.get_E_rms_fitted_spectrum()
 
     #checked
